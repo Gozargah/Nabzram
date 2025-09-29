@@ -249,6 +249,6 @@ This project is licensed under the GNU General Public License v3.0 (GPL-3.0). Se
 
 ## Support
 
-- **Issues**: [GitHub Issues](https://github.com/your-username/Marzban-GUI/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/your-username/Marzban-GUI/discussions)
-- **Documentation**: [Wiki](https://github.com/your-username/Marzban-GUI/wiki)
+- **Issues**: [GitHub Issues](https://github.com/Gozargah/Nabzram/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/Gozargah/Nabzram/discussions)
+- **Documentation**: [Wiki](https://github.com/Gozargah/Nabzram/wiki)
