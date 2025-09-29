@@ -1,0 +1,63 @@
+annotated-types==0.7.0
+anyio==4.11.0
+bottle==0.13.4
+certifi==2025.8.3
+click==8.3.0
+dnspython==2.8.0
+email-validator==2.3.0
+fastapi==0.117.1
+fastapi-cli==0.0.13
+fastapi-cloud-cli==0.2.0
+h11==0.16.0
+httpcore==1.0.9
+httptools==0.6.4
+httpx==0.28.1
+idna==3.10
+Jinja2==3.1.6
+markdown-it-py==4.0.0
+MarkupSafe==3.0.2
+mdurl==0.1.2
+pillow==11.3.0
+platformdirs==4.4.0
+proxy_tools==0.1.0
+pydantic==2.11.9
+pydantic-settings==2.10.1
+pydantic_core==2.33.2
+Pygments==2.19.2
+pystray==0.19.5
+python-dotenv==1.1.1
+python-multipart==0.0.20
+python-xlib==0.33
+pywebview==6.0
+PyYAML==6.0.2
+rich==14.1.0
+rich-toolkit==0.15.1
+rignore==0.6.4
+sentry-sdk==2.38.0
+shellingham==1.5.4
+six==1.17.0
+sniffio==1.3.1
+sse-starlette==3.0.2
+starlette==0.48.0
+tinydb==4.8.2
+typer==0.19.2
+typing-inspection==0.4.1
+typing_extensions==4.15.0
+urllib3==2.5.0
+uvicorn==0.37.0
+watchfiles==1.1.0
+websockets==15.0.1
+
+# Qt
+# packaging==25.0; sys_platform == "linux"
+# PyQt6==6.9.1; sys_platform == "linux"
+# PyQt6-Qt6==6.9.2; sys_platform == "linux"
+# PyQt6-WebEngine==6.9.0; sys_platform == "linux"
+# PyQt6-WebEngine-Qt6==6.9.2; sys_platform == "linux"
+# PyQt6_sip==13.10.2; sys_platform == "linux"
+# QtPy==2.4.3; sys_platform == "linux"
+
+# GTK
+pycairo==1.28.0; sys_platform == "linux"
+PyGObject==3.50.0; sys_platform == "linux"
+PyGObject-stubs==2.13.0; sys_platform == "linux"

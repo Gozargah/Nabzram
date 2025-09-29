@@ -1,0 +1,5 @@
+{
+  "name": "Nabzram",
+  "description": "A mobile-first UI to manage VPN subscriptions and connections. Users can add, modify, delete, and update subscriptions, and connect to nested servers.",
+  "requestFramePermissions": []
+}

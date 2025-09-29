@@ -1,0 +1,40 @@
+/* 
+  To complete this setup, download the Asap font family (e.g., from Google Fonts)
+  and place the .woff2 files in a `public/fonts/` directory.
+*/
+
+/* Regular */
+@font-face {
+  font-family: 'Asap';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/Asap-Regular.woff2') format('woff2');
+}
+
+/* Medium */
+@font-face {
+  font-family: 'Asap';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('/fonts/Asap-Medium.woff2') format('woff2');
+}
+
+/* SemiBold */
+@font-face {
+  font-family: 'Asap';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('/fonts/Asap-SemiBold.woff2') format('woff2');
+}
+
+/* Bold */
+@font-face {
+  font-family: 'Asap';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('/fonts/Asap-Bold.woff2') format('woff2');
+}

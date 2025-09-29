@@ -1,0 +1,316 @@
+name: Build & Release (Nabzram)
+
+on:
+  push:
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  # Build the frontend once on Ubuntu and publish ui/dist as an artifact
+  frontend:
+    name: Build (UI)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "latest"
+
+      - name: Cache Bun deps
+        uses: actions/cache@v4
+        with:
+          path: |
+            ui/node_modules
+            ~/.bun/install/cache
+          key: ubuntu-bun-${{ hashFiles('ui/bun.lockb') }}
+          restore-keys: |
+            ubuntu-bun-
+
+      - name: Install & build frontend
+        working-directory: ui
+        shell: bash
+        run: |
+          bun install --frozen-lockfile
+          bun run build
+
+      - name: Upload ui/dist
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist
+          path: ui/dist
+          if-no-files-found: error
+
+  # Matrix compile with Nuitka; download ui/dist artifact instead of rebuilding
+  build:
+    name: Build (${{ matrix.os }} / ${{ matrix.arch }})
+    needs: frontend
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Linux
+          - os: linux
+            arch: x86_64
+            runner: ubuntu-latest
+          - os: linux
+            arch: arm64
+            runner: ubuntu-24.04-arm
+
+          # Windows (x64 only)
+          - os: windows
+            arch: x86_64
+            runner: windows-latest
+
+          # macOS
+          - os: macos
+            arch: arm64
+            runner: macos-latest
+          - os: macos
+            arch: x86_64
+            runner: macos-13
+
+    env:
+      OUTPUT_DIR: build
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      # Get prebuilt frontend into ui/dist
+      - name: Download frontend dist
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-dist
+          path: ui/dist
+
+      # Linux GUI system deps for PyGObject/pycairo/WebKitGTK
+      - name: System deps (Linux GUI)
+        if: matrix.os == 'linux'
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            pkg-config build-essential python3-dev \
+            libcairo2-dev libgirepository1.0-dev \
+            libgtk-3-dev libwebkit2gtk-4.1-dev
+
+      # Python deps
+      - name: Install Python deps (Linux/macOS)
+        if: matrix.os != 'windows'
+        shell: bash
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Install Python deps (Windows)
+        if: matrix.os == 'windows'
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      # Optional: UPX for smaller binaries
+      - name: Install UPX (Linux)
+        if: matrix.os == 'linux'
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y upx ccache || true
+
+      - name: Install UPX (Windows)
+        if: matrix.os == 'windows'
+        shell: pwsh
+        run: choco install -y upx || ver > NUL
+
+      - name: Install UPX (macOS)
+        if: matrix.os == 'macos'
+        shell: bash
+        run: brew install upx || true
+
+      # =========================
+      # Build with Nuitka-Action
+      # =========================
+
+      # Linux
+      - name: Build (Nuitka Linux)
+        if: matrix.os == 'linux'
+        uses: Nuitka/nuitka-action@v1.3
+        with:
+          script-name: main.py
+          mode: app
+          include-data-dir: |
+            ui/dist=ui/dist
+          include-data-files: |
+            assets/icon.png=assets/icon.png
+          enable-plugins: |
+            pywebview
+            upx
+          linux-icon: assets/icon.png
+          output-file: nabzram-linux-${{ matrix.arch }}
+
+      # Windows x64
+      - name: Build (Nuitka Windows x64)
+        if: matrix.os == 'windows' && matrix.arch == 'x86_64'
+        uses: Nuitka/nuitka-action@v1.3
+        with:
+          script-name: main.py
+          mode: app
+          include-data-dir: |
+            ui/dist=ui/dist
+          include-data-files: |
+            assets/icon.ico=assets/icon.ico
+          enable-plugins: |
+            pywebview
+            upx
+          windows-console-mode: disable
+          windows-icon-from-ico: assets/icon.ico
+          output-file: nabzram-windows-${{ matrix.arch }}
+
+      # macOS (icon + app name)
+      - name: Build (Nuitka macOS)
+        if: matrix.os == 'macos'
+        uses: Nuitka/nuitka-action@v1.3
+        with:
+          script-name: main.py
+          mode: app
+          include-data-dir: |
+            ui/dist=ui/dist
+          include-data-files: |
+            assets/icon.icns=assets/icon.icns
+          enable-plugins: |
+            pywebview
+          macos-app-icon: assets/icon.icns
+          macos-app-name: Nabzram
+          output-file: Nabzram
+
+      # Post-build packaging / artifacts for macOS
+      - name: Zip macOS
+        if: matrix.os == 'macos'
+        shell: bash
+        run: |
+          set -e
+          cd "$OUTPUT_DIR"
+          shopt -s nullglob
+          APP_DIR="$(ls -d *.app 2>/dev/null | head -n1 || true)"
+          if [ -z "$APP_DIR" ]; then
+            echo "No *.app bundle found under $PWD"
+            exit 1
+          fi
+          if [ "$APP_DIR" != "Nabzram.app" ]; then
+            rm -rf Nabzram.app
+            mv "$APP_DIR" "Nabzram.app"
+          fi
+          ditto -c -k --sequesterRsrc --keepParent "Nabzram.app" "nabzram-macos-${{ matrix.arch }}.zip"
+          ls -lh "nabzram-macos-${{ matrix.arch }}.zip"
+
+      # =========================
+      # Extra: Package .deb on Linux
+      # =========================
+      - name: Install fpm (Linux)
+        if: matrix.os == 'linux'
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ruby ruby-dev build-essential
+          sudo gem install --no-document fpm
+
+      - name: Package .deb (Linux)
+        if: matrix.os == 'linux'
+        shell: bash
+        run: |
+          BIN="nabzram-linux-${{ matrix.arch }}"
+          OUTDIR="build"
+
+          VERSION="$GITHUB_REF_NAME"
+          if [[ "$VERSION" == v* ]]; then
+            VERSION="${VERSION#v}"
+          fi
+
+          mkdir -p pkgroot/usr/bin
+          mkdir -p pkgroot/usr/share/applications
+          mkdir -p pkgroot/usr/share/icons/hicolor/256x256/apps
+
+          cp "$OUTDIR/$BIN" pkgroot/usr/bin/nabzram
+          chmod 755 pkgroot/usr/bin/nabzram
+
+          cat > pkgroot/usr/share/applications/nabzram.desktop <<'EOF'
+          [Desktop Entry]
+          Name=Nabzram
+          Comment=Run the Nabzram desktop app
+          Exec=nabzram
+          Icon=nabzram
+          Terminal=false
+          Type=Application
+          Categories=Utility;
+          EOF
+
+          cp assets/icon.png pkgroot/usr/share/icons/hicolor/256x256/apps/nabzram.png
+
+          fpm -s dir -t deb \
+            -n nabzram \
+            -v "$VERSION" \
+            --architecture ${{ matrix.arch }} \
+            --description "Nabzram desktop app" \
+            --license "GPL" \
+            --url "https://github.com/${{ github.repository }}" \
+            --maintainer "SaintShit <saintshit@proton.me>" \
+            --category "utils" \
+            -C pkgroot .
+
+          mv *.deb "$OUTDIR/"
+
+      # Upload artifacts
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: nabzram-${{ matrix.os }}-${{ matrix.arch }}
+          path: |
+            build/nabzram-linux-*
+            build/nabzram-windows-*.exe
+            build/nabzram-macos-*.zip
+            build/*.deb
+          if-no-files-found: ignore
+
+  release:
+    name: Release assets
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    permissions:
+      contents: write
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: nabzram-*
+          path: artifacts
+          merge-multiple: true
+
+      - name: List downloaded files (debug)
+        run: ls -R artifacts || true
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          make_latest: true
+          generate_release_notes: true
+          files: |
+            artifacts/**/nabzram-linux-*
+            artifacts/**/nabzram-windows-*.exe
+            artifacts/**/nabzram-macos-*.zip
+            artifacts/**/*.deb
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

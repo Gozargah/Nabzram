@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <link rel="icon" type="image/png" href="/icon.png" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Nabzram</title>
+  <script src="/lib/tailwindcss.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="/index.css">
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['var(--font-sans)', 'Asap', 'sans-serif'],
+          },
+          colors: {
+            border: 'hsl(var(--border))',
+            input: 'hsl(var(--input))',
+            ring: 'hsl(var(--ring))',
+            background: 'hsl(var(--background))',
+            foreground: 'hsl(var(--foreground))',
+            primary: {
+              DEFAULT: 'hsl(var(--primary))',
+              foreground: 'hsl(var(--primary-foreground))',
+            },
+            secondary: {
+              DEFAULT: 'hsl(var(--secondary))',
+              foreground: 'hsl(var(--secondary-foreground))',
+            },
+            destructive: {
+              DEFAULT: 'hsl(var(--destructive))',
+              foreground: 'hsl(var(--destructive-foreground))',
+            },
+            muted: {
+              DEFAULT: 'hsl(var(--muted))',
+              foreground: 'hsl(var(--muted-foreground))',
+            },
+            accent: {
+              DEFAULT: 'hsl(var(--accent))',
+              foreground: 'hsl(var(--accent-foreground))',
+            },
+            popover: {
+              DEFAULT: 'hsl(var(--popover))',
+              foreground: 'hsl(var(--popover-foreground))',
+            },
+            card: {
+              DEFAULT: 'hsl(var(--card))',
+              foreground: 'hsl(var(--card-foreground))',
+            },
+            success: 'hsl(var(--success))',
+          },
+          keyframes: {
+            'fade-in-right': {
+              '0%': { opacity: '0', transform: 'translateX(10px)' },
+              '100%': { opacity: '1', transform: 'translateX(0)' },
+            },
+            'fade-in-up': {
+              '0%': { opacity: '0', transform: 'translateY(10px)' },
+              '100%': { opacity: '1', transform: 'translateY(0)' },
+            },
+            'fade-in-down': {
+              '0%': { opacity: '0', transform: 'translateY(-10px)' },
+              '100%': { opacity: '1', transform: 'translateY(0)' },
+            },
+            'fade-in': {
+              '0%': { opacity: '0' },
+              '100%': { opacity: '1' },
+            },
+            'fade-out': {
+              '100%': { opacity: '0' },
+            },
+            'scale-in': {
+              '0%': { opacity: '0', transform: 'scale(0.95)' },
+              '100%': { opacity: '1', transform: 'scale(1)' },
+            },
+            'scale-out': {
+              '100%': { opacity: '0', transform: 'scale(0.95)' } 
+            }
+          },
+          animation: {
+            'fade-in-right': 'fade-in-right 0.2s ease-out forwards',
+            'fade-in-up': 'fade-in-up 0.2s ease-out forwards',
+            'fade-in-down': 'fade-in-down 0.15s ease-out forwards',
+            'fade-in': 'fade-in 0.15s ease-out forwards',
+            'fade-out': 'fade-out 0.15s ease-out forwards',
+            'scale-in': 'scale-in 0.15s ease-out forwards',
+            'scale-out': 'scale-out 0.15s ease-out forwards',
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    @keyframes wifi-pulse {
+
+      0%,
+      100% {
+        opacity: 0.3;
+      }
+
+      50% {
+        opacity: 1;
+      }
+    }
+
+    .animate-wifi-pulse {
+      animation: wifi-pulse 1s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+    }
+
+    @keyframes fast-pulse {
+      50% {
+        opacity: 0.5;
+      }
+    }
+
+    .animate-fast-pulse {
+      animation: fast-pulse 1s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+    }
+
+    /* Hide scrollbar for Chrome, Safari and Opera */
+    ::-webkit-scrollbar {
+      display: none;
+    }
+
+    /* Hide scrollbar for IE, Edge and Firefox */
+    body {
+      -ms-overflow-style: none;
+      /* IE and Edge */
+      scrollbar-width: none;
+      /* Firefox */
+    }
+    
+    .pywebview-drag-region:active {
+      cursor: move;
+    }
+
+    /* Hide number input spinners for Webkit browsers */
+    input::-webkit-outer-spin-button,
+    input::-webkit-inner-spin-button {
+      -webkit-appearance: none;
+      margin: 0;
+    }
+
+    /* Hide number input spinners for Firefox */
+    input[type=number] {
+      -moz-appearance: textfield;
+    }
+  </style>
+  <script type="importmap">
+{
+  "imports": {
+    "react": "/lib/react.mjs",
+    "react-dom/": "/lib/react-dom.mjs",
+    "react/": "/lib/react.mjs"
+  }
+}
+</script>
+</head>
+
+<body class="bg-background">
+  <div id="root"></div>
+  <script type="module" src="/index.tsx"></script>
+</body>
+
+</html>
