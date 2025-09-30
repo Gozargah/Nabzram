@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Nuitka build script for Nabzram
-This script builds the FastAPI application with Nuitka compiler
+This script builds the Nabzram application with Nuitka compiler
 """
 
 import importlib.util

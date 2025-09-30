@@ -1,24 +1,95 @@
+
+
 import React, { useState, useEffect, useCallback } from 'react';
-import { Subscription, ServerStatusResponse, SystemInfo } from './types';
+import {
+    Subscription,
+    ServerStatusResponse,
+    SystemInfo,
+    SettingsResponse,
+    SettingsUpdate,
+    SubscriptionDetail,
+    SubscriptionCreate,
+    SubscriptionUpdate,
+    SubscriptionUrlTestResponse,
+    XrayVersionInfo,
+    XrayUpdateRequest,
+    XrayUpdateResponse,
+    GeodataUpdateResponse,
+    SubscriptionCreateResponse,
+    SubscriptionUpdateResponse,
+    SubscriptionDeleteResponse,
+    SubscriptionRefreshResponse,
+    ServerStartResponse,
+    ServerStopResponse,
+    SettingsUpdateResponse
+} from './types';
 import * as api from './services/api';
 import SubscriptionList from './components/SubscriptionList';
 import StatusIndicator from './components/StatusIndicator';
 import AddSubscriptionModal from './components/AddSubscriptionModal';
 import SettingsModal from './components/SettingsModal';
-import LogStreamModal from './components/LogStreamModal';
 import UpdateModal from './components/UpdateModal';
-import { CogIcon, NabzramIcon, MinimizeIcon, XIcon } from './components/icons';
+import { CogIcon, NabzramIcon, MinimizeIcon, XIcon, TerminalIcon } from './components/icons';
 import ToastContainer from './components/ToastContainer';
 import { useToast } from './contexts/ToastContext';
 import InstallationRequired from './components/InstallationRequired';
+import LogStreamModal from './components/LogStreamModal';
+
+interface PywebviewApi {
+    // Window controls
+    minimize: () => void;
+    close: () => void;
+    show: () => void;
+    hide: () => void;
+    maximize: () => void;
+    restore: () => void;
+    toggle: () => void;
+    quit: () => void;
+    is_visible: () => boolean;
+    is_focused: () => boolean;
+    toggle_fullscreen: () => void;
+    set_on_top: (value: boolean) => void;
+    resize: (width: number, height: number) => void;
+    move: (x: number, y: number) => void;
+    get_size: () => [number, number];
+    get_position: () => [number, number];
+
+    // Settings
+    get_settings: () => Promise<SettingsResponse>;
+    update_settings: (payload: SettingsUpdate) => Promise<SettingsUpdateResponse>;
+
+    // Subscriptions
+    list_subscriptions: () => Promise<Subscription[]>;
+    get_subscription: (subscription_id: string) => Promise<SubscriptionDetail>;
+    create_subscription: (payload: SubscriptionCreate) => Promise<SubscriptionCreateResponse>;
+    update_subscription: (subscription_id: string, payload: SubscriptionUpdate) => Promise<SubscriptionUpdateResponse>;
+    delete_subscription: (subscription_id: string) => Promise<SubscriptionDeleteResponse>;
+    refresh_subscription_servers: (subscription_id: string) => Promise<SubscriptionRefreshResponse>;
+
+    // Server control
+    start_server: (subscription_id: string, server_id: string) => Promise<ServerStartResponse>;
+    stop_server: () => Promise<ServerStopResponse>;
+    get_server_status: () => Promise<ServerStatusResponse>;
+    test_subscription_servers: (subscription_id: string) => Promise<SubscriptionUrlTestResponse>;
+
+    // System
+    get_xray_status: () => Promise<SystemInfo>;
+
+    // Updates
+    get_xray_version_info: () => Promise<XrayVersionInfo>;
+    update_xray: (payload: XrayUpdateRequest) => Promise<XrayUpdateResponse>;
+    update_geodata: () => Promise<GeodataUpdateResponse>;
+    
+    // Logs
+    get_log_snapshot: (limit?: number) => Promise<any>;
+    get_log_stream_batch: (since_ms?: number, limit?: number) => Promise<any>;
+}
+
 
 declare global {
     interface Window {
         pywebview?: {
-            api: {
-                minimize: () => void;
-                close: () => void;
-            }
+            api: PywebviewApi
         }
     }
 }
@@ -31,8 +102,8 @@ const App: React.FC = () => {
     const [isConnecting, setIsConnecting] = useState(false);
     const [isAddModalOpen, setIsAddModalOpen] = useState(false);
     const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
-    const [isLogsModalOpen, setIsLogsModalOpen] = useState(false);
     const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false);
+    const [isLogModalOpen, setIsLogModalOpen] = useState(false);
     const { addToast } = useToast();
 
     const fetchData = useCallback(async () => {
@@ -180,7 +251,6 @@ const App: React.FC = () => {
                             isConnecting={isConnecting}
                             onConnect={handleAutoConnect}
                             onStop={handleStopServer} 
-                            onOpenLogs={() => setIsLogsModalOpen(true)}
                             onOpenUpdates={() => setIsUpdateModalOpen(true)}
                         />
                         
@@ -208,6 +278,13 @@ const App: React.FC = () => {
                     <h1 className="text-xl font-bold tracking-wider text-foreground">Nabzram</h1>
                 </div>
                 <div className="flex items-center space-x-2">
+                    <button
+                        onClick={() => setIsLogModalOpen(true)}
+                        className="p-2 text-muted-foreground hover:text-foreground rounded-full transition-colors"
+                        aria-label="Open logs"
+                    >
+                        <TerminalIcon className="h-5 w-5" />
+                    </button>
                     <button 
                         onClick={() => setIsSettingsModalOpen(true)} 
                         className="p-2 text-muted-foreground hover:text-foreground rounded-full transition-colors"
@@ -247,14 +324,14 @@ const App: React.FC = () => {
                     onSaveSuccess={onSettingsSaveSuccess}
                 />
             )}
-            {isLogsModalOpen && (
-                <LogStreamModal onClose={() => setIsLogsModalOpen(false)} />
-            )}
             {isUpdateModalOpen && (
                 <UpdateModal 
                     onClose={() => setIsUpdateModalOpen(false)}
                     onUpdateSuccess={onUpdateSuccess}
                 />
+            )}
+            {isLogModalOpen && (
+                <LogStreamModal onClose={() => setIsLogModalOpen(false)} />
             )}
         </div>
     );

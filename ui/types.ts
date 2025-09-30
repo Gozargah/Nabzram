@@ -1,3 +1,5 @@
+
+
 export enum ServerStatus {
   STOPPED = 'stopped',
   RUNNING = 'running',
@@ -36,7 +38,6 @@ export interface AllocatedPort {
 }
 
 export interface ServerStatusResponse {
-  success: boolean;
   message: string;
   server_id: string | null;
   status: ServerStatus;
@@ -67,7 +68,6 @@ export interface ServerTestResult {
 }
 
 export interface SubscriptionUrlTestResponse {
-  success: boolean;
   message: string;
   subscription_id: string;
   subscription_name: string;
@@ -117,15 +117,74 @@ export interface XrayUpdateRequest {
 }
 
 export interface XrayUpdateResponse {
-    success: boolean;
     message: string;
     version: string;
     current_version: string | null;
 }
 
 export interface GeodataUpdateResponse {
-    success: boolean;
     message: string;
     updated_files: Record<string, boolean>;
     assets_folder: string;
+}
+
+export interface SubscriptionCreateResponse {
+  message: string;
+  id: string;
+  name: string;
+  server_count: number;
+}
+
+export interface SubscriptionUpdateResponse {
+  message: string;
+  id: string;
+  name: string;
+}
+
+export interface SubscriptionDeleteResponse {
+  message: string;
+  id: string;
+  name: string;
+}
+
+export interface SubscriptionRefreshResponse {
+  message: string;
+  id: string;
+  server_count: number;
+  last_updated: string | null;
+}
+
+export interface ServerStartResponse {
+  message: string;
+  server_id: string;
+  status: 'running';
+  remarks: string;
+}
+
+export interface ServerStopResponse {
+  message: string;
+  server_id: string | null;
+  status: 'stopped';
+}
+
+export interface SettingsUpdateResponse extends SettingsResponse {
+  message: string;
+}
+
+export interface LogEntry {
+  timestamp: string; // ISO datetime
+  message: string;
+}
+
+export interface LogSnapshotResponse {
+  message: string;
+  server_id: string | null;
+  logs: LogEntry[];
+}
+
+export interface LogStreamBatchResponse {
+  message: string;
+  server_id: string | null;
+  logs: LogEntry[];
+  next_since_ms: number | null;
 }

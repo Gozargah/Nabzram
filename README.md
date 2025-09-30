@@ -13,7 +13,7 @@
 
 > This entire project, including the logo, components, app architecture, and even this README you're reading right now, was crafted by AI. Well, except the name "Nabzram" - that was my brilliant idea! 😮‍💨 I was bored one day, had some subscriptions to use, and thought "why not?" So here we are - a desktop app that actually does exactly what it needs to do, and it works!
 
-A cool GUI application for adding and connecting to **Marzban subscription servers**. Built with Python, React, wrapped in a native desktop application using pywebview.
+A modern GUI application for managing and connecting to **Marzban subscription servers**. Built with Python and React, wrapped in a native desktop application using pywebview.
 
 > **Important**: This app is made specifically for Marzban subscriptions. It runs Xray-core and exposes SOCKS/HTTP proxies to your system - **no TUN interface or system-wide proxy configuration** (for now).
 
@@ -30,16 +30,16 @@ No installation required - just run the executable!
 
 ## Features
 
-- **📱 Mobile-First Design**: Clean, responsive UI optimized for mobile and desktop
-- **🔗 Marzban Subscription Tool**: Add and connect to Marzban subscription servers
+- **📱 Modern UI**: Clean, responsive interface with dark theme
+- **🔧 System Tray**: Minimize to system tray with quick access
+- **🔗 Marzban Integration**: Add and connect to Marzban subscription servers
 - **🌐 Multi-Server Support**: Connect to multiple servers from different subscriptions
 - **⚡ Real-time Status**: Live connection status and server monitoring
 - **📊 Traffic Monitoring**: View usage statistics and subscription limits
 - **🔄 Auto-Updates**: Automatic Xray-core binary updates
 - **📝 Log Streaming**: Real-time connection logs and debugging
-- **🎨 Dark Theme**: Modern dark theme with customizable settings
+- **🎨 Customizable Settings**: Configure Xray paths, ports, and preferences
 - **🖥️ Cross-Platform**: Native desktop app supporting Windows, macOS, and Linux
-- **🔧 System Tray**: Minimize to system tray with quick access
 
 ## Screenshots
 
@@ -58,7 +58,7 @@ No installation required - just run the executable!
 
 - **Python 3.12+**
 - **Xray-core**: Optional - app will download it for you if not found
-- **Node.js/Bun**: For frontend development (optional)
+- **Bun**: For frontend development (recommended) or Node.js
 
 **Supported Platforms**: Windows, macOS, and Linux
 
@@ -135,19 +135,21 @@ bun install
 bun run dev
 ```
 
+The development server will start on `http://localhost:5173` and automatically reload on changes.
+
 ### Backend Development
 
-The backend uses FastAPI and runs on a configurable port:
+The backend uses a modular architecture with operations and services:
 
 ```bash
-# Run on default random port (10000-65535)
-python server.py
+# Run the main application
+python main.py
 
-# Run on specific port
-NABZRAM_API_PORT=8000 python server.py
+# The application uses pywebview to create a native desktop window
+# No separate server process needed - everything runs in the main process
 ```
 
-**Note**: If `NABZRAM_API_PORT` is not set, the server will automatically find a random free port between 10000-65535.
+**Note**: The application uses pywebview's built-in HTTP server for the frontend-backend communication.
 
 ### Building Executable
 
@@ -157,7 +159,16 @@ Build a standalone executable using Nuitka:
 python build.py
 ```
 
-This will create a single executable file in the `dist/` directory.
+This will:
+1. Build the React frontend using Vite
+2. Compile the Python application with Nuitka
+3. Create a single executable file in the `dist/` directory
+
+The build script automatically handles:
+- Frontend dependency installation and building
+- Nuitka installation if not present
+- Platform-specific optimizations (Windows, macOS, Linux)
+- Icon and asset bundling
 
 ## Configuration
 
@@ -170,10 +181,8 @@ cp env.example .env
 ```
 
 Available options:
-- `NABZRAM_DATABASE_PATH`: Database file location
-- `NABZRAM_API_HOST`: API host (default: 0.0.0.0)
-- `NABZRAM_API_PORT`: API port (default: 8000)
-- `NABZRAM_CORS_ORIGINS`: CORS origins (default: *)
+- `DATABASE_PATH`: Database file location (default: user data directory)
+- `DEBUG`: Enable debug mode (default: false)
 
 ### Settings
 
@@ -204,16 +213,25 @@ Configure the application through the Settings modal:
 ## Architecture
 
 ### Backend (Python)
-- **FastAPI**: REST API server
+- **PyWebview**: Desktop application wrapper with built-in HTTP server
 - **TinyDB**: Local database for subscriptions and settings
 - **Xray-core**: Proxy protocol implementation
-- **PyWebview**: Desktop application wrapper
 
 ### Frontend (React)
 - **React 19**: UI framework
 - **TypeScript**: Type safety
 - **Vite**: Build tool and dev server
 - **Tailwind CSS**: Styling (via CDN)
+
+### Project Structure
+```
+app/
+├── gui/           # GUI management and window APIs
+├── ops/           # Core operations (logs, servers, settings, etc.)
+├── services/      # Business logic services
+├── models/        # Data models and schemas
+└── database/      # Database management
+```
 
 ## Supported Protocols
 
@@ -243,9 +261,14 @@ This project is licensed under the GNU General Public License v3.0 (GPL-3.0). Se
 ## Acknowledgments
 
 - [Xray-core](https://github.com/XTLS/Xray-core) - Proxy protocol implementation
-- [FastAPI](https://fastapi.tiangolo.com/) - Web framework
 - [React](https://reactjs.org/) - UI library
 - [PyWebview](https://github.com/r0x0r/pywebview) - Desktop wrapper
+- [TinyDB](https://tinydb.readthedocs.io/) - Lightweight database
+- [Nuitka](https://nuitka.net/) - Python compiler for standalone executables
+
+## API Documentation
+
+For detailed API documentation, see [docs/API.md](docs/API.md). This document covers all available methods exposed to the frontend via `window.pywebview.api`.
 
 ## Support
 

@@ -1,6 +1,7 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { ServerStatus, ServerStatusResponse, SystemInfo } from '../types';
-import { PowerIcon, TerminalIcon, ClockIcon } from './icons';
+import { PowerIcon, ClockIcon } from './icons';
 
 interface StatusIndicatorProps {
     status: ServerStatusResponse | null;
@@ -8,11 +9,10 @@ interface StatusIndicatorProps {
     isConnecting: boolean;
     onConnect: () => void;
     onStop: () => void;
-    onOpenLogs: () => void;
     onOpenUpdates: () => void;
 }
 
-const StatusIndicator: React.FC<StatusIndicatorProps> = ({ status, xrayStatus, isConnecting, onConnect, onStop, onOpenLogs, onOpenUpdates }) => {
+const StatusIndicator: React.FC<StatusIndicatorProps> = ({ status, xrayStatus, isConnecting, onConnect, onStop, onOpenUpdates }) => {
     const [duration, setDuration] = useState('');
     const [isFreshlyConnected, setIsFreshlyConnected] = useState(false);
     const isConnected = status?.status === ServerStatus.RUNNING;
@@ -135,14 +135,6 @@ const StatusIndicator: React.FC<StatusIndicatorProps> = ({ status, xrayStatus, i
                                 {status.allocated_ports.map(p => `${p.protocol.toUpperCase()}: ${p.port}`).join(' | ')}
                             </p>
                         )}
-                        <button 
-                            onClick={onOpenLogs} 
-                            className="flex items-center space-x-1 text-muted-foreground hover:text-foreground transition-colors focus:outline-none text-xs font-mono"
-                            title="View Logs"
-                        >
-                            <TerminalIcon className="h-4 w-4" />
-                            <span>View Logs</span>
-                        </button>
                         {xrayStatus && (
                             <div
                                 onClick={onOpenUpdates}

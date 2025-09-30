@@ -13,10 +13,10 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
-from platformdirs import user_data_dir
 from tinydb import Query, TinyDB
 
 from app.models.database import ServerModel, SettingsModel, SubscriptionModel
+from settings import DATA_DIR
 
 
 def check_xray_command_available() -> tuple[bool, str | None]:
@@ -57,7 +57,7 @@ def get_xray_data_directory() -> Path:
     Get the appropriate directory for storing xray binary and assets.
     Uses platformdirs to get the correct user data directory for each platform.
     """
-    return Path(user_data_dir("nabzram", "nabzram")) / "xray"
+    return DATA_DIR / "xray"
 
 
 def get_default_xray_binary_filename() -> str:
@@ -72,13 +72,13 @@ def get_default_xray_binary_filename() -> str:
 class DatabaseManager:
     """Manages TinyDB operations for subscriptions, servers, and settings"""
 
-    def __init__(self, db_path: str = "data/db.json"):
+    def __init__(self, db_path: str = str(DATA_DIR / "db.json")):
         """Initialize the database manager"""
         self.db_path = db_path
         self._lock = threading.RLock()  # Reentrant lock for thread safety
 
         # Ensure database directory exists
-        os.makedirs(os.path.dirname(os.path.abspath(db_path)), exist_ok=True)
+        os.makedirs(os.path.dirname(os.path.abspath(str(db_path))), exist_ok=True)
 
         self.db = TinyDB(db_path, indent=2)
 

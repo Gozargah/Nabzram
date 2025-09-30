@@ -9,7 +9,8 @@ from typing import Any, Dict, List, Optional
 from urllib.parse import urljoin
 from uuid import uuid4
 
-from httpx import AsyncClient, HTTPStatusError, RequestError
+from requests import Session
+from requests.exceptions import HTTPError, RequestException
 
 from app.models.database import ServerModel, SubscriptionModel, SubscriptionUserInfo
 from app.models.schemas import SubscriptionCreate
@@ -19,11 +20,12 @@ class SubscriptionService:
     """Service for managing proxy subscriptions"""
 
     def __init__(self):
-        self.http_client = AsyncClient(timeout=30.0)
+        self.session = Session()
+        self.session.timeout = 30.0
 
-    async def close(self):
-        """Close HTTP client"""
-        await self.http_client.aclose()
+    def close(self):
+        """Close HTTP session"""
+        self.session.close()
 
     def _normalize_url(self, url: str) -> str:
         """Normalize subscription URL by appending /v2ray-json if missing"""
@@ -84,12 +86,12 @@ class SubscriptionService:
             )
             return None
 
-    async def fetch_subscription_config(
+    def fetch_subscription_config(
         self, url: str
     ) -> tuple[List[Dict[str, Any]], Optional[SubscriptionUserInfo]]:
         """Fetch and parse subscription configuration and user info"""
         try:
-            response = await self.http_client.get(url)
+            response = self.session.get(url)
             response.raise_for_status()
 
             # Parse subscription-userinfo header if present
@@ -124,10 +126,10 @@ class SubscriptionService:
 
             return configs, user_info
 
-        except RequestError as e:
+        except RequestException as e:
             raise ValueError(f"Failed to fetch subscription: {str(e)}")
-        except HTTPStatusError as e:
-            raise ValueError(f"HTTP error {e.response.status_code}: {e.response.text}")
+        except HTTPError as e:
+            raise ValueError(f"HTTP error {response.status_code}: {response.text}")
 
     def _extract_server_info(
         self, config: Dict[str, Any]
@@ -174,7 +176,7 @@ class SubscriptionService:
 
         return modified_config
 
-    async def create_subscription(
+    def create_subscription(
         self,
         subscription_data: SubscriptionCreate,
         socks_port: Optional[int] = None,
@@ -185,7 +187,7 @@ class SubscriptionService:
         normalized_url = self._normalize_url(str(subscription_data.url))
 
         # Fetch subscription configuration and user info
-        configs, user_info = await self.fetch_subscription_config(normalized_url)
+        configs, user_info = self.fetch_subscription_config(normalized_url)
 
         # Create server models from configs
         servers = []
@@ -215,7 +217,7 @@ class SubscriptionService:
 
         return subscription
 
-    async def update_subscription_servers(
+    def update_subscription_servers(
         self,
         subscription: SubscriptionModel,
         socks_port: Optional[int] = None,
@@ -223,7 +225,7 @@ class SubscriptionService:
     ) -> SubscriptionModel:
         """Update servers for an existing subscription"""
         # Fetch fresh configuration and user info
-        configs, user_info = await self.fetch_subscription_config(subscription.url)
+        configs, user_info = self.fetch_subscription_config(subscription.url)
 
         # Create new server models
         new_servers = []

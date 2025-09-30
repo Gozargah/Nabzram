@@ -2,24 +2,26 @@
 Xray-core process management service
 """
 
-import asyncio
 import json
 import logging
 import os
 import platform
+import subprocess
+import threading
+import time
 from copy import deepcopy
 from datetime import datetime
+from queue import Empty, Queue
 from random import randint
 from shutil import which
 from socket import AF_INET, SOCK_STREAM, socket
-from time import time
-from typing import AsyncGenerator, Dict, List, Optional, Tuple
+from typing import Dict, Generator, List, Optional, Tuple
 from uuid import UUID
 
-from httpx import AsyncClient, TimeoutException
+from requests import get as http_get
+from requests.exceptions import RequestException, Timeout
 
-from app.core.config import get_settings
-from app.dependencies import get_global_database
+from app.database import db
 from app.models.database import ProcessInfo
 
 logger = logging.getLogger(__name__)
@@ -40,23 +42,18 @@ class ProcessManager:
     """Manages xray-core processes"""
 
     def __init__(self):
-        self.settings = get_settings()
         self.running_processes: Dict[UUID, ProcessInfo] = {}
-        self.process_handles: Dict[UUID, asyncio.subprocess.Process] = {}
-        self.log_queues: Dict[UUID, asyncio.Queue] = {}
+        self.process_handles: Dict[UUID, subprocess.Popen] = {}
+        self.log_queues: Dict[UUID, Queue] = {}
+        self.log_threads: Dict[UUID, threading.Thread] = {}
         self.current_server_id: Optional[UUID] = (
             None  # Track the currently running server
         )
 
-    @property
-    def db(self):
-        """Get the global database instance"""
-        return get_global_database()
-
     def get_effective_xray_binary(self) -> str:
         """Get the effective xray binary path from database settings or system PATH"""
         try:
-            db_settings = self.db.get_settings()
+            db_settings = db.get_settings()
             if db_settings.xray_binary:
                 return db_settings.xray_binary
         except Exception as e:
@@ -77,7 +74,7 @@ class ProcessManager:
     def get_xray_assets_folder(self) -> Optional[str]:
         """Get the xray assets folder from database settings"""
         try:
-            db_settings = self.db.get_settings()
+            db_settings = db.get_settings()
             if db_settings.xray_assets_folder:
                 return db_settings.xray_assets_folder
         except Exception as e:
@@ -88,7 +85,7 @@ class ProcessManager:
         # No fallback - return None if not set in database
         return None
 
-    async def check_xray_availability(self) -> Dict[str, any]:
+    def check_xray_availability(self) -> Dict[str, any]:
         """Check if xray-core is available and get version info"""
         try:
             # Try to run xray version command
@@ -97,19 +94,16 @@ class ProcessManager:
             # On Windows, hide the console window
             creationflags = 0
             if platform.system() == "Windows":
-                import subprocess
-
                 creationflags = subprocess.CREATE_NO_WINDOW
 
-            process = await asyncio.create_subprocess_exec(
-                xray_binary,
-                "version",
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
+            process = subprocess.Popen(
+                [xray_binary, "version"],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
                 creationflags=creationflags,
             )
 
-            stdout, stderr = await process.communicate()
+            stdout, stderr = process.communicate()
 
             if process.returncode == 0:
                 version_output = stdout.decode().strip()
@@ -179,7 +173,7 @@ class ProcessManager:
         except Exception as e:
             return {"available": False, "error": str(e)}
 
-    async def start_single_server(
+    def start_single_server(
         self,
         server_id: UUID,
         subscription_id: UUID,
@@ -197,10 +191,10 @@ class ProcessManager:
             logger.info(
                 f"Stopping current server {self.current_server_id} before starting new one"
             )
-            await self.stop_server(self.current_server_id)
+            self.stop_server(self.current_server_id)
 
         # Start the new server with port overrides
-        success, error_msg = await self.start_server(
+        success, error_msg = self.start_server(
             server_id, subscription_id, config, socks_port, http_port
         )
         if success:
@@ -233,7 +227,7 @@ class ProcessManager:
     def _apply_log_level_override(self, config: Dict) -> Dict:
         """Apply global log level override to xray configuration"""
         try:
-            db_settings = self.db.get_settings()
+            db_settings = db.get_settings()
             if db_settings.xray_log_level:
                 modified_config = deepcopy(config)
 
@@ -254,7 +248,7 @@ class ProcessManager:
 
         return config
 
-    async def start_server(
+    def start_server(
         self,
         server_id: UUID,
         subscription_id: UUID,
@@ -297,32 +291,24 @@ class ProcessManager:
                     f"Setting XRAY_LOCATION_ASSET environment variable to: {xray_assets_folder}"
                 )
 
-            # Create async subprocess
+            # Create subprocess
             # On Windows, hide the console window
             creationflags = 0
             if platform.system() == "Windows":
-                import subprocess
-
                 creationflags = subprocess.CREATE_NO_WINDOW
 
-            process = await asyncio.create_subprocess_exec(
-                xray_binary,
-                "run",
-                "-config",
-                "stdin:",
-                stdin=asyncio.subprocess.PIPE,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.STDOUT,
-                limit=1024 * 1024,  # 1MB buffer limit
+            process = subprocess.Popen(
+                [xray_binary, "run", "-config", "stdin:"],
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
                 env=env,
                 creationflags=creationflags,
             )
 
             # Send config via stdin
             process.stdin.write(config_json.encode())
-            await process.stdin.drain()
             process.stdin.close()
-            await process.stdin.wait_closed()
 
             # Store process information with runtime config (including port overrides)
             process_info = ProcessInfo(
@@ -337,15 +323,19 @@ class ProcessManager:
             self.process_handles[server_id] = process
 
             # Create log queue for this server with limited size
-            self.log_queues[server_id] = asyncio.Queue(maxsize=1000)
+            self.log_queues[server_id] = Queue(maxsize=200)
 
-            # Start log reading task
-            asyncio.create_task(self._read_process_logs(server_id, process))
+            # Start log reading thread
+            log_thread = threading.Thread(
+                target=self._read_process_logs, args=(server_id, process), daemon=True
+            )
+            log_thread.start()
+            self.log_threads[server_id] = log_thread
 
             # Give the process a moment to start and check if it's still running
-            await asyncio.sleep(0.1)
+            time.sleep(0.1)
 
-            if process.returncode is not None:
+            if process.poll() is not None:
                 # Process died immediately, clean up and return failure
                 logger.error(
                     f"Server {server_id} process died immediately with return code {process.returncode}"
@@ -354,17 +344,13 @@ class ProcessManager:
                 # Try to read any error output
                 error_details = f"Process exited with code {process.returncode}"
                 try:
-                    remaining_output = await asyncio.wait_for(
-                        process.stdout.read(), timeout=1.0
-                    )
+                    remaining_output = process.stdout.read()
                     if remaining_output:
                         error_msg = remaining_output.decode(
                             "utf-8", errors="ignore"
                         ).strip()
                         logger.error(f"Server {server_id} error output: {error_msg}")
                         error_details = f"Process exited with code {process.returncode}. Error: {error_msg}"
-                except asyncio.TimeoutError:
-                    pass
                 except Exception as ex:
                     logger.debug(f"Failed to read error output: {ex}")
 
@@ -375,6 +361,8 @@ class ProcessManager:
                     del self.process_handles[server_id]
                 if server_id in self.log_queues:
                     del self.log_queues[server_id]
+                if server_id in self.log_threads:
+                    del self.log_threads[server_id]
                 return False, error_details
 
             logger.info(f"Started server {server_id} with PID {process.pid}")
@@ -392,10 +380,12 @@ class ProcessManager:
                 del self.process_handles[server_id]
             if server_id in self.log_queues:
                 del self.log_queues[server_id]
+            if server_id in self.log_threads:
+                del self.log_threads[server_id]
 
             return False, f"Failed to start server: {error_msg}"
 
-    async def stop_server(self, server_id: UUID) -> bool:
+    def stop_server(self, server_id: UUID) -> bool:
         """Stop a running server"""
         if server_id not in self.running_processes:
             logger.warning(f"Server {server_id} is not running")
@@ -409,19 +399,21 @@ class ProcessManager:
 
             # Wait for process to terminate
             try:
-                await asyncio.wait_for(process.wait(), timeout=10)
-            except asyncio.TimeoutError:
+                process.wait(timeout=10)
+            except subprocess.TimeoutExpired:
                 # Force kill if doesn't terminate gracefully
                 process.kill()
-                await process.wait()
+                process.wait()
 
             # Clean up
             del self.running_processes[server_id]
             del self.process_handles[server_id]
 
-            # Clean up log queue
+            # Clean up log queue and thread
             if server_id in self.log_queues:
                 del self.log_queues[server_id]
+            if server_id in self.log_threads:
+                del self.log_threads[server_id]
 
             # Clear current server if this was it
             if self.current_server_id == server_id:
@@ -434,7 +426,7 @@ class ProcessManager:
             logger.error(f"Failed to stop server {server_id}: {e}")
             return False
 
-    async def restart_server(
+    def restart_server(
         self,
         server_id: UUID,
         subscription_id: UUID,
@@ -448,11 +440,11 @@ class ProcessManager:
             Tuple[bool, Optional[str]]: (success, error_message)
         """
         if server_id in self.running_processes:
-            await self.stop_server(server_id)
+            self.stop_server(server_id)
             # Small delay to ensure clean shutdown
-            await asyncio.sleep(1)
+            time.sleep(1)
 
-        return await self.start_server(
+        return self.start_server(
             server_id, subscription_id, config, socks_port, http_port
         )
 
@@ -466,7 +458,7 @@ class ProcessManager:
             return False
 
         # Check if process is still alive
-        if process.returncode is not None:
+        if process.poll() is not None:
             # Process has terminated, clean up
             if server_id in self.running_processes:
                 del self.running_processes[server_id]
@@ -474,6 +466,8 @@ class ProcessManager:
                 del self.process_handles[server_id]
             if server_id in self.log_queues:
                 del self.log_queues[server_id]
+            if server_id in self.log_threads:
+                del self.log_threads[server_id]
             return False
 
         return True
@@ -499,36 +493,20 @@ class ProcessManager:
         if config and "inbounds" in config:
             for inbound in config["inbounds"]:
                 if "port" in inbound:
-                    tag = inbound.get("tag", "")
-                    protocol = self._extract_protocol_from_tag(tag, inbound)
+                    protocol = self._extract_protocol_from_tag(inbound)
 
                     port_info.append(
                         {
                             "port": inbound["port"],
                             "protocol": protocol,
-                            "tag": tag if tag else None,
+                            "tag": inbound.get("tag", None),
                         }
                     )
 
         return port_info
 
-    def _extract_protocol_from_tag(self, tag: str, inbound: Dict) -> str:
-        """Extract protocol type from inbound tag or configuration"""
-        tag_lower = tag.lower() if tag else ""
-
-        # Check tag for common protocol indicators
-        if "socks" in tag_lower:
-            return "socks"
-        elif "http" in tag_lower:
-            return "http"
-        elif "trojan" in tag_lower:
-            return "trojan"
-        elif "vless" in tag_lower:
-            return "vless"
-        elif "vmess" in tag_lower:
-            return "vmess"
-        elif "shadowsocks" in tag_lower or "ss" in tag_lower:
-            return "shadowsocks"
+    def _extract_protocol_from_tag(self, inbound: Dict) -> str:
+        """Extract protocol type from configuration"""
 
         # Check inbound protocol field if available
         if "protocol" in inbound:
@@ -566,13 +544,13 @@ class ProcessManager:
             return self.get_server_port_info(self.current_server_id)
         return []
 
-    async def stop_current_server(self) -> bool:
+    def stop_current_server(self) -> bool:
         """Stop the currently running server"""
         if self.current_server_id:
-            return await self.stop_server(self.current_server_id)
+            return self.stop_server(self.current_server_id)
         return True  # No server running, consider it success
 
-    async def restart_current_server(
+    def restart_current_server(
         self,
         subscription_id: UUID,
         config: Dict,
@@ -585,19 +563,17 @@ class ProcessManager:
             Tuple[bool, Optional[str]]: (success, error_message)
         """
         if self.current_server_id:
-            return await self.restart_server(
+            return self.restart_server(
                 self.current_server_id, subscription_id, config, socks_port, http_port
             )
         return False, "No server is currently running"
 
-    async def _read_process_logs(
-        self, server_id: UUID, process: asyncio.subprocess.Process
-    ):
+    def _read_process_logs(self, server_id: UUID, process: subprocess.Popen):
         """Read logs from a process and queue them"""
         try:
             while True:
-                # Use async readline to avoid blocking
-                line_bytes = await process.stdout.readline()
+                # Use readline to avoid blocking
+                line_bytes = process.stdout.readline()
                 if not line_bytes:
                     break
 
@@ -608,26 +584,24 @@ class ProcessManager:
                 # Queue the log line
                 if server_id in self.log_queues:
                     try:
-                        await self.log_queues[server_id].put(
+                        self.log_queues[server_id].put(
                             {
                                 "timestamp": datetime.now(),
                                 "server_id": server_id,
                                 "message": line,
-                            }
+                            },
+                            block=False,
                         )
-                    except asyncio.QueueFull:
-                        # Queue is full, skip this log entry
-                        pass
                     except Exception:
-                        # Queue might be closed or other error
-                        break
+                        # Queue is full or other error, skip this log entry
+                        pass
 
         except Exception as e:
             logger.error(f"Error reading logs for server {server_id}: {e}")
         finally:
-            logger.debug(f"Log reading task for server {server_id} ended")
+            logger.debug(f"Log reading thread for server {server_id} ended")
 
-    async def get_server_logs(self, server_id: UUID) -> AsyncGenerator[Dict, None]:
+    def get_server_logs(self, server_id: UUID) -> Generator[Dict, None, None]:
         """Get real-time logs for a specific server"""
         if server_id not in self.log_queues:
             return
@@ -638,9 +612,9 @@ class ProcessManager:
             while True:
                 # Wait for log message with timeout
                 try:
-                    log_entry = await asyncio.wait_for(queue.get(), timeout=1.0)
+                    log_entry = queue.get(timeout=1.0)
                     yield log_entry
-                except asyncio.TimeoutError:
+                except Empty:
                     # Check if server is still running
                     if not self.is_server_running(server_id):
                         break
@@ -648,25 +622,77 @@ class ProcessManager:
         except Exception as e:
             logger.error(f"Error streaming logs for server {server_id}: {e}")
 
-    async def get_current_server_logs(self) -> AsyncGenerator[Dict, None]:
+    def get_current_server_logs(self) -> Generator[Dict, None, None]:
         """Get real-time logs from the currently running server"""
         if self.current_server_id:
-            async for log_entry in self.get_server_logs(self.current_server_id):
+            for log_entry in self.get_server_logs(self.current_server_id):
                 yield log_entry
         else:
             # No server running, just wait and check periodically
             while True:
-                await asyncio.sleep(1)
+                time.sleep(1)
                 if self.current_server_id:
-                    async for log_entry in self.get_server_logs(self.current_server_id):
+                    for log_entry in self.get_server_logs(self.current_server_id):
                         yield log_entry
                     break
 
-    async def shutdown_all(self):
+    def get_log_snapshot(self, server_id: UUID, limit: int = 100) -> List[Dict]:
+        """Get a snapshot of recent logs from the queue"""
+        if server_id not in self.log_queues:
+            return []
+
+        logs = []
+        queue = self.log_queues[server_id]
+
+        # Get all available logs from queue (non-blocking)
+        while len(logs) < limit:
+            try:
+                log_entry = queue.get_nowait()
+                logs.append(
+                    {
+                        "timestamp": log_entry["timestamp"].isoformat(),
+                        "message": log_entry["message"],
+                    }
+                )
+            except Empty:
+                break
+
+        return logs
+
+    def get_logs_since(
+        self, server_id: UUID, since_ms: int, limit: int = 200
+    ) -> List[Dict]:
+        """Get logs since a timestamp from the queue"""
+        if server_id not in self.log_queues:
+            return []
+
+        logs = []
+        queue = self.log_queues[server_id]
+
+        # Get all available logs from queue (non-blocking)
+        while len(logs) < limit:
+            try:
+                log_entry = queue.get_nowait()
+                log_timestamp_ms = int(log_entry["timestamp"].timestamp() * 1000)
+
+                # Filter by timestamp
+                if log_timestamp_ms > since_ms:
+                    logs.append(
+                        {
+                            "timestamp": log_entry["timestamp"].isoformat(),
+                            "message": log_entry["message"],
+                        }
+                    )
+            except Empty:
+                break
+
+        return logs
+
+    def shutdown_all(self):
         """Shutdown all running servers"""
         server_ids = list(self.running_processes.keys())
         for server_id in server_ids:
-            await self.stop_server(server_id)
+            self.stop_server(server_id)
 
         logger.info("All servers stopped")
 
@@ -703,7 +729,7 @@ class ProcessManager:
 
         return socks_port, http_port
 
-    async def test_server_connectivity(
+    def test_server_connectivity(
         self,
         server_id: UUID,
         subscription_id: UUID,
@@ -724,7 +750,7 @@ class ProcessManager:
             runtime_config = self._apply_log_level_override(runtime_config)
 
             # Start server with random ports
-            success, error_msg = await self.start_server(
+            success, error_msg = self.start_server(
                 server_id, subscription_id, runtime_config
             )
             if not success:
@@ -732,35 +758,38 @@ class ProcessManager:
                 return False, None, error_detail, socks_port, http_port
 
             # Wait a moment for server to fully start
-            await asyncio.sleep(2)
+            time.sleep(2)
 
             # Test HTTP connectivity through the proxy
-            start_time = time()
+            start_time = time.time()
             try:
                 # Use the HTTP proxy for testing
-                proxy_url = f"http://127.0.0.1:{http_port}"
+                proxies = {
+                    "http": f"http://127.0.0.1:{http_port}",
+                    "https": f"http://127.0.0.1:{http_port}",
+                }
 
-                async with AsyncClient(
-                    proxy=proxy_url,
+                response = http_get(
+                    "http://gstatic.com/generate_204",
+                    proxies=proxies,
                     timeout=test_timeout,
-                ) as client:
-                    response = await client.get("http://gstatic.com/generate_204")
+                )
 
-                    if response.status_code == 204:
-                        ping_ms = int((time() - start_time) * 1000)
-                        return True, ping_ms, None, socks_port, http_port
-                    else:
-                        return (
-                            False,
-                            None,
-                            f"HTTP {response.status_code}",
-                            socks_port,
-                            http_port,
-                        )
+                if response.status_code == 204:
+                    ping_ms = int((time.time() - start_time) * 1000)
+                    return True, ping_ms, None, socks_port, http_port
+                else:
+                    return (
+                        False,
+                        None,
+                        f"HTTP {response.status_code}",
+                        socks_port,
+                        http_port,
+                    )
 
-            except TimeoutException:
+            except Timeout:
                 return False, None, "Connection timeout", socks_port, http_port
-            except Exception as e:
+            except RequestException as e:
                 return False, None, f"Connection error: {str(e)}", socks_port, http_port
 
         except Exception as e:
@@ -769,33 +798,27 @@ class ProcessManager:
             # Always stop the test server
             try:
                 if server_id in self.running_processes:
-                    await self.stop_server(server_id)
+                    self.stop_server(server_id)
             except Exception:
                 pass
 
-    async def test_subscription_servers(
+    def test_subscription_servers(
         self, subscription_servers: List, subscription_id: UUID, test_timeout: int = 6
     ) -> List[Dict]:
         """
-        Test all servers in a subscription concurrently
+        Test all servers in a subscription sequentially
         Returns list of test results
         """
         results = []
 
-        # Create tasks for concurrent testing
-        tasks = []
+        # Test servers sequentially
         for server in subscription_servers:
-            task = asyncio.create_task(
-                self.test_server_connectivity(
-                    server.id, subscription_id, server.raw, test_timeout
-                )
-            )
-            tasks.append((server, task))
-
-        # Wait for all tests to complete
-        for server, task in tasks:
             try:
-                success, ping_ms, error, socks_port, http_port = await task
+                success, ping_ms, error, socks_port, http_port = (
+                    self.test_server_connectivity(
+                        server.id, subscription_id, server.raw, test_timeout
+                    )
+                )
 
                 results.append(
                     {

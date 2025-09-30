@@ -1,109 +1,118 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Modal from './Modal';
-import { API_BASE_URL } from '../constants';
+import * as api from '../services/api';
+import { LogEntry } from '../types';
 
 interface LogStreamModalProps {
     onClose: () => void;
 }
 
-type LogLevel = 'info' | 'log' | 'error' | 'system';
-
-interface LogEntry {
-    id: number;
-    message: string;
-    level: LogLevel;
-}
-
 const LogStreamModal: React.FC<LogStreamModalProps> = ({ onClose }) => {
     const [logs, setLogs] = useState<LogEntry[]>([]);
-    const [isConnected, setIsConnected] = useState(false);
+    const [isLoading, setIsLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
     const logContainerRef = useRef<HTMLDivElement>(null);
-    const logIdCounter = useRef(0);
+    const sinceMsRef = useRef<number | null>(null);
 
+    // Initial fetch
     useEffect(() => {
-        const addLog = (message: string, level: LogLevel) => {
-            setLogs(prev => [...prev, { id: logIdCounter.current++, message, level }]);
-        };
-
-        addLog('Connecting to log stream...', 'system');
-        const eventSource = new EventSource(`${API_BASE_URL}/logs/stream`);
-        
-        eventSource.onopen = () => {
-            setIsConnected(true);
-            setLogs(prev => prev.filter(l => !l.message.includes('Connecting')));
-            addLog('Connection established. Waiting for logs...', 'system');
-        };
-
-        const handleEvent = (event: Event, level: LogLevel) => {
-            // FIX: Cast event to MessageEvent. EventSource's addEventListener provides a generic
-            // Event type, but for server-sent events, it's a MessageEvent with a 'data' property.
-            const messageEvent = event as MessageEvent;
+        const fetchInitialLogs = async () => {
+            setIsLoading(true);
+            setError(null);
             try {
-                const data = JSON.parse(messageEvent.data);
-                const message = data.timestamp
-                    ? `[${new Date(data.timestamp).toLocaleTimeString()}] ${data.message}`
-                    : data.message;
-                addLog(message, level);
-            } catch (e) {
-                addLog(messageEvent.data, level); // Fallback for non-JSON data
+                const response = await api.getLogSnapshot(200);
+                setLogs(response.logs);
+                // Set the starting point for polling to be right after the snapshot
+                sinceMsRef.current = Date.now();
+            } catch (err) {
+                const message = err instanceof Error ? err.message : "Failed to load initial logs.";
+                setError(message);
+            } finally {
+                setIsLoading(false);
             }
         };
 
-        eventSource.addEventListener('log', (event) => handleEvent(event, 'log'));
-        eventSource.addEventListener('info', (event) => handleEvent(event, 'info'));
-        eventSource.addEventListener('error', (event) => handleEvent(event, 'error'));
-        
-        eventSource.onerror = () => {
-            if (isConnected) { // Only show error if we were previously connected
-                addLog('Connection lost. Please close and reopen to reconnect.', 'system');
-            } else {
-                 addLog('Failed to connect to log stream.', 'system');
-            }
-            setIsConnected(false);
-            eventSource.close();
-        };
-        
-        return () => {
-            eventSource.close();
-        };
-    }, [isConnected]);
+        fetchInitialLogs();
+    }, []);
 
+    // Polling effect
+    useEffect(() => {
+        if (isLoading || error) {
+            return; // Don't start polling until initial load is done and successful
+        }
+
+        const poll = async () => {
+            try {
+                const response = await api.getLogStreamBatch(sinceMsRef.current ?? undefined, 200);
+                if (response.logs && response.logs.length > 0) {
+                    setLogs(prevLogs => [...prevLogs, ...response.logs]);
+                }
+                if (response.next_since_ms) {
+                    sinceMsRef.current = response.next_since_ms;
+                }
+            } catch (err) {
+                console.error("Log polling error:", err);
+                // Can add a visual indicator for polling errors if needed
+            }
+        };
+
+        const intervalId = setInterval(poll, 1500);
+
+        return () => clearInterval(intervalId);
+    }, [isLoading, error]);
+
+    // Auto-scroll effect
     useEffect(() => {
         if (logContainerRef.current) {
-            logContainerRef.current.scrollTop = logContainerRef.current.scrollHeight;
+            // Only auto-scroll if user is near the bottom
+            const { scrollHeight, scrollTop, clientHeight } = logContainerRef.current;
+            if (scrollHeight - scrollTop <= clientHeight + 50) { // 50px threshold
+                logContainerRef.current.scrollTop = logContainerRef.current.scrollHeight;
+            }
         }
     }, [logs]);
 
-    const getLogColor = (level: LogLevel) => {
-        switch (level) {
-            case 'error': return 'text-destructive';
-            case 'info': return 'text-primary';
-            case 'system': return 'text-muted-foreground/70';
-            case 'log':
-            default: return 'text-muted-foreground';
+    const renderLogs = () => {
+        if (isLoading) {
+            return (
+                <div className="flex justify-center items-center h-full">
+                    <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-primary"></div>
+                </div>
+            );
         }
+        if (error) {
+            return <div className="text-destructive text-center">{error}</div>;
+        }
+        if (logs.length === 0) {
+            return <div className="text-muted-foreground text-center">No log entries found.</div>;
+        }
+
+        return logs.map((log, index) => (
+             <div key={index} className="flex items-start">
+                <span className="text-primary/70 pr-3 whitespace-nowrap">{new Date(log.timestamp).toLocaleTimeString()}</span>
+                <span className="whitespace-pre-wrap break-all">{log.message}</span>
+             </div>
+        ));
     };
 
     return (
         <Modal title="Live Logs" onClose={onClose}>
-            <div 
-                ref={logContainerRef} 
-                className="bg-background text-muted-foreground font-mono text-xs p-4 rounded-md h-96 overflow-y-auto border border-border"
+            <div
+                ref={logContainerRef}
+                className="bg-background text-muted-foreground font-mono text-xs p-4 rounded-md h-96 overflow-y-auto border border-border space-y-1"
                 aria-live="polite"
                 aria-atomic="false"
             >
-                {logs.map((log) => (
-                    <div key={log.id} className={`whitespace-pre-wrap ${getLogColor(log.level)}`}>{log.message}</div>
-                ))}
+                {renderLogs()}
             </div>
              <div className="flex justify-end pt-4">
-                    <button 
-                        onClick={onClose}
-                        className="bg-secondary text-secondary-foreground font-bold py-2 px-4 rounded-md hover:bg-secondary/80 transition-colors"
-                    >
-                        Close
-                    </button>
-                </div>
+                <button
+                    onClick={onClose}
+                    className="bg-secondary text-secondary-foreground font-bold py-2 px-4 rounded-md hover:bg-secondary/80 transition-colors"
+                >
+                    Close
+                </button>
+            </div>
         </Modal>
     );
 };

@@ -1,124 +1,111 @@
-import { API_BASE_URL } from '../constants';
-import { Subscription, SubscriptionDetail, ServerStatusResponse, SubscriptionCreate, SubscriptionUpdate, SettingsResponse, SettingsUpdate, SubscriptionUrlTestResponse, SystemInfo, XrayVersionInfo, XrayUpdateRequest, XrayUpdateResponse, GeodataUpdateResponse } from '../types';
 
-async function handleResponse<T>(response: Response): Promise<T> {
-    if (!response.ok) {
-        let errorData;
-        try {
-            errorData = await response.json();
-        } catch (e) {
-            throw new Error(`HTTP error! status: ${response.status} - ${response.statusText}`);
-        }
-        const errorMessage = errorData.detail?.[0]?.msg || errorData.detail || 'An unknown API error occurred';
-        throw new Error(errorMessage);
-    }
-    return response.json() as Promise<T>;
+
+import {
+    Subscription,
+    SubscriptionDetail,
+    ServerStatusResponse,
+    SubscriptionCreate,
+    SubscriptionUpdate,
+    SettingsResponse,
+    SettingsUpdate,
+    SubscriptionUrlTestResponse,
+    SystemInfo,
+    XrayVersionInfo,
+    XrayUpdateRequest,
+    XrayUpdateResponse,
+    GeodataUpdateResponse,
+    SubscriptionCreateResponse,
+    SubscriptionUpdateResponse,
+    SubscriptionDeleteResponse,
+    SubscriptionRefreshResponse,
+    ServerStartResponse,
+    ServerStopResponse,
+    SettingsUpdateResponse,
+    LogSnapshotResponse,
+    LogStreamBatchResponse
+} from '../types';
+
+async function callApp<T>(method: string, ...args: any[]): Promise<T> {
+  const api = (window as any).pywebview?.api;
+  if (!api || typeof api[method] !== 'function') {
+    throw new Error(`App API not available: ${method}`);
+  }
+  const res = await api[method].apply(api, args);
+  if (res && typeof res === 'object' && res.success === false) {
+    const extra = res.data && Object.keys(res.data).length ? ` (${JSON.stringify(res.data)})` : '';
+    throw new Error(`${res.message || 'Operation failed'}${extra}`);
+  }
+  return res as T;
 }
 
 export async function getSubscriptions(): Promise<Subscription[]> {
-    const response = await fetch(`${API_BASE_URL}/subscriptions`);
-    return handleResponse<Subscription[]>(response);
+    return callApp<Subscription[]>('list_subscriptions');
 }
 
 export async function getSubscriptionDetails(id: string): Promise<SubscriptionDetail> {
-    const response = await fetch(`${API_BASE_URL}/subscriptions/${id}`);
-    return handleResponse<SubscriptionDetail>(response);
+    return callApp<SubscriptionDetail>('get_subscription', id);
 }
 
-export async function createSubscription(data: SubscriptionCreate): Promise<any> {
-    const response = await fetch(`${API_BASE_URL}/subscriptions`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-    });
-    return handleResponse(response);
+export async function createSubscription(data: SubscriptionCreate): Promise<SubscriptionCreateResponse> {
+    return callApp('create_subscription', data);
 }
 
-export async function updateSubscription(id: string, data: SubscriptionUpdate): Promise<any> {
-    const response = await fetch(`${API_BASE_URL}/subscriptions/${id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-    });
-    return handleResponse(response);
+export async function updateSubscription(id: string, data: SubscriptionUpdate): Promise<SubscriptionUpdateResponse> {
+    return callApp('update_subscription', id, data);
 }
 
-export async function deleteSubscription(id: string): Promise<any> {
-    const response = await fetch(`${API_BASE_URL}/subscriptions/${id}`, {
-        method: 'DELETE',
-    });
-    return handleResponse(response);
+export async function deleteSubscription(id: string): Promise<SubscriptionDeleteResponse> {
+    return callApp('delete_subscription', id);
 }
 
-export async function refreshSubscriptionServers(id: string): Promise<any> {
-    const response = await fetch(`${API_BASE_URL}/subscriptions/${id}/update`, {
-        method: 'POST',
-    });
-    return handleResponse(response);
+export async function refreshSubscriptionServers(id: string): Promise<SubscriptionRefreshResponse> {
+    return callApp('refresh_subscription_servers', id);
 }
 
-export async function startServer(subscriptionId: string, serverId: string): Promise<any> {
-    const response = await fetch(`${API_BASE_URL}/subscriptions/${subscriptionId}/servers/${serverId}/start`, {
-        method: 'POST',
-    });
-    return handleResponse(response);
+export async function startServer(subscriptionId: string, serverId: string): Promise<ServerStartResponse> {
+    return callApp('start_server', subscriptionId, serverId);
 }
 
-export async function stopServer(): Promise<any> {
-    const response = await fetch(`${API_BASE_URL}/subscriptions/server/stop`, {
-        method: 'POST',
-    });
-    return handleResponse(response);
+export async function stopServer(): Promise<ServerStopResponse> {
+    return callApp('stop_server');
 }
 
 export async function getServerStatus(): Promise<ServerStatusResponse> {
-    const response = await fetch(`${API_BASE_URL}/subscriptions/server/status`);
-    return handleResponse<ServerStatusResponse>(response);
+    return callApp<ServerStatusResponse>('get_server_status');
 }
 
 export async function getSettings(): Promise<SettingsResponse> {
-    const response = await fetch(`${API_BASE_URL}/settings`);
-    return handleResponse<SettingsResponse>(response);
+    return callApp<SettingsResponse>('get_settings');
 }
 
-export async function updateSettings(data: SettingsUpdate): Promise<any> {
-    const response = await fetch(`${API_BASE_URL}/settings`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-    });
-    return handleResponse(response);
+export async function updateSettings(data: SettingsUpdate): Promise<SettingsUpdateResponse> {
+    return callApp('update_settings', data);
 }
 
 export async function testSubscriptionServers(id: string): Promise<SubscriptionUrlTestResponse> {
-    const response = await fetch(`${API_BASE_URL}/subscriptions/${id}/url-test`, {
-        method: 'POST',
-    });
-    return handleResponse<SubscriptionUrlTestResponse>(response);
+    return callApp<SubscriptionUrlTestResponse>('test_subscription_servers', id);
 }
 
 export async function getXrayStatus(): Promise<SystemInfo> {
-    const response = await fetch(`${API_BASE_URL}/system/xray`);
-    return handleResponse<SystemInfo>(response);
+    return callApp<SystemInfo>('get_xray_status');
 }
 
 export async function getXrayVersionInfo(): Promise<XrayVersionInfo> {
-    const response = await fetch(`${API_BASE_URL}/updates/xray/info`);
-    return handleResponse<XrayVersionInfo>(response);
+    return callApp<XrayVersionInfo>('get_xray_version_info');
 }
 
 export async function updateXray(data: XrayUpdateRequest): Promise<XrayUpdateResponse> {
-    const response = await fetch(`${API_BASE_URL}/updates/xray/update`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-    });
-    return handleResponse<XrayUpdateResponse>(response);
+    return callApp<XrayUpdateResponse>('update_xray', data);
 }
 
 export async function updateGeodata(): Promise<GeodataUpdateResponse> {
-    const response = await fetch(`${API_BASE_URL}/updates/geodata/update`, {
-        method: 'POST',
-    });
-    return handleResponse<GeodataUpdateResponse>(response);
+    return callApp<GeodataUpdateResponse>('update_geodata');
+}
+
+export async function getLogSnapshot(limit?: number): Promise<LogSnapshotResponse> {
+    return callApp<LogSnapshotResponse>('get_log_snapshot', limit);
+}
+
+export async function getLogStreamBatch(since_ms?: number, limit?: number): Promise<LogStreamBatchResponse> {
+    return callApp<LogStreamBatchResponse>('get_log_stream_batch', since_ms, limit);
 }

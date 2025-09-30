@@ -12,7 +12,7 @@ from tempfile import NamedTemporaryFile, TemporaryDirectory
 from typing import Dict, List
 from zipfile import ZipFile
 
-from httpx import AsyncClient
+from requests import get as http_get
 
 logger = logging.getLogger(__name__)
 
@@ -91,101 +91,95 @@ class XrayUpdateService:
         # - Xray-macos-arm64-v8a.zip
         return f"Xray-{os_suffix}-{arch_suffix}.zip"
 
-    def _get_http_client(self) -> AsyncClient:
-        """Create an AsyncClient with default timeout."""
-        return AsyncClient(timeout=self.timeout)
-
-    async def get_latest_version(self) -> str:
+    def get_latest_version(self) -> str:
         """Get the latest Xray release version"""
         try:
-            async with self._get_http_client() as client:
-                response = await client.get(
-                    f"{self.github_api_base}/releases/latest",
-                    headers={"Accept": "application/vnd.github.v3+json"},
-                )
-                response.raise_for_status()
+            response = http_get(
+                f"{self.github_api_base}/releases/latest",
+                headers={"Accept": "application/vnd.github.v3+json"},
+                timeout=self.timeout,
+            )
+            response.raise_for_status()
 
-                data = response.json()
-                version = data.get("tag_name", "")
+            data = response.json()
+            version = data.get("tag_name", "")
 
-                # Normalize version (ensure it starts with 'v')
-                if version and not version.startswith("v"):
-                    version = f"v{version}"
+            # Normalize version (ensure it starts with 'v')
+            if version and not version.startswith("v"):
+                version = f"v{version}"
 
-                return version
+            return version
 
         except Exception as e:
             logger.error(f"Failed to get latest Xray version: {e}")
             raise RuntimeError(f"Failed to fetch latest version: {str(e)}")
 
-    async def get_available_versions(self, limit: int = 10) -> List[str]:
+    def get_available_versions(self, limit: int = 10) -> List[str]:
         """Get list of available Xray versions"""
         try:
-            async with self._get_http_client() as client:
-                response = await client.get(
-                    f"{self.github_api_base}/releases",
-                    headers={"Accept": "application/vnd.github.v3+json"},
-                    params={"per_page": limit},
-                )
-                response.raise_for_status()
+            response = http_get(
+                f"{self.github_api_base}/releases",
+                headers={"Accept": "application/vnd.github.v3+json"},
+                params={"per_page": limit},
+                timeout=self.timeout,
+            )
+            response.raise_for_status()
 
-                data = response.json()
-                versions = []
+            data = response.json()
+            versions = []
 
-                for release in data:
-                    version = release.get("tag_name", "")
-                    if version:
-                        # Normalize version
-                        if not version.startswith("v"):
-                            version = f"v{version}"
-                        versions.append(version)
+            for release in data:
+                version = release.get("tag_name", "")
+                if version:
+                    # Normalize version
+                    if not version.startswith("v"):
+                        version = f"v{version}"
+                    versions.append(version)
 
-                return versions
+            return versions
 
         except Exception as e:
             logger.error(f"Failed to get Xray versions: {e}")
             raise RuntimeError(f"Failed to fetch versions: {str(e)}")
 
-    async def get_available_versions_with_sizes(
-        self, limit: int = 10
-    ) -> Dict[str, int]:
+    def get_available_versions_with_sizes(self, limit: int = 10) -> Dict[str, int]:
         """Get available Xray versions with their download sizes"""
         try:
-            async with self._get_http_client() as client:
-                response = await client.get(
-                    f"{self.github_api_base}/releases",
-                    headers={"Accept": "application/vnd.github.v3+json"},
-                    params={"per_page": limit},
-                )
-                response.raise_for_status()
+            response = http_get(
+                f"{self.github_api_base}/releases",
+                headers={"Accept": "application/vnd.github.v3+json"},
+                params={"per_page": limit},
+                timeout=self.timeout,
+            )
+            response.raise_for_status()
 
-                data = response.json()
-                filename = self._build_asset_filename()
-                version_sizes = {}
+            data = response.json()
+            filename = self._build_asset_filename()
+            version_sizes = {}
 
-                for release in data:
-                    version = release.get("tag_name", "")
-                    if version:
-                        # Normalize version
-                        if not version.startswith("v"):
-                            version = f"v{version}"
+            for release in data:
+                version = release.get("tag_name", "")
+                if version:
+                    # Normalize version
+                    if not version.startswith("v"):
+                        version = f"v{version}"
 
-                        # Look for the matching asset in this release
-                        assets = release.get("assets", [])
-                        for asset in assets:
-                            if asset.get("name") == filename:
-                                size = asset.get("size")
-                                if isinstance(size, int):
-                                    version_sizes[version] = size
-                                break
+                    # Look for the matching asset in this release
+                    assets = release.get("assets", [])
+                    for asset in assets:
+                        if asset.get("name") == filename:
+                            size = asset.get("size")
+                            if isinstance(size, int):
+                                version_sizes[version] = size
+                            break
 
-                return version_sizes
+            return version_sizes
 
         except Exception as e:
             logger.error(f"Failed to get Xray versions with sizes: {e}")
             raise RuntimeError(f"Failed to fetch versions with sizes: {str(e)}")
 
-    async def download_xray(self, version: str, target_path: str) -> bool:
+    def download_xray(self, version: str, target_path: str) -> bool:
         """Download and install Xray binary"""
         try:
             # Normalize version
@@ -205,34 +199,37 @@ class XrayUpdateService:
                 checksum_file = temp_path / f"{filename}.dgst"
 
                 # Download files
-                async with self._get_http_client() as client:
-                    # Download zip file
-                    logger.info(f"Downloading from: {download_url}")
-                    response = await client.get(download_url, follow_redirects=True)
-                    response.raise_for_status()
+                # Download zip file
+                logger.info(f"Downloading from: {download_url}")
+                response = http_get(
+                    download_url, allow_redirects=True, timeout=self.timeout
+                )
+                response.raise_for_status()
 
-                    with open(zip_file, "wb") as f:
-                        f.write(response.content)
+                with open(zip_file, "wb") as f:
+                    f.write(response.content)
 
-                    # Download checksum file
-                    logger.info(f"Downloading checksum from: {checksum_url}")
-                    response = await client.get(checksum_url, follow_redirects=True)
-                    response.raise_for_status()
+                # Download checksum file
+                logger.info(f"Downloading checksum from: {checksum_url}")
+                response = http_get(
+                    checksum_url, allow_redirects=True, timeout=self.timeout
+                )
+                response.raise_for_status()
 
-                    checksum_content = response.text
-                    if "Not Found" in checksum_content:
-                        logger.warning(
-                            "Checksum verification not available for this version"
-                        )
-                    else:
-                        with open(checksum_file, "w") as f:
-                            f.write(checksum_content)
+                checksum_content = response.text
+                if "Not Found" in checksum_content:
+                    logger.warning(
+                        "Checksum verification not available for this version"
+                    )
+                else:
+                    with open(checksum_file, "w") as f:
+                        f.write(checksum_content)
 
-                        # Verify checksum
-                        await self._verify_checksum(zip_file, checksum_file)
+                    # Verify checksum
+                    self._verify_checksum(zip_file, checksum_file)
 
                 # Extract and install
-                await self._extract_and_install(zip_file, target_path)
+                self._extract_and_install(zip_file, target_path)
 
             logger.info(f"Successfully updated Xray to version {version}")
             return True
@@ -241,7 +238,7 @@ class XrayUpdateService:
             logger.error(f"Failed to download Xray {version}: {e}")
             raise RuntimeError(f"Download failed: {str(e)}")
 
-    async def _verify_checksum(self, zip_file: Path, checksum_file: Path) -> None:
+    def _verify_checksum(self, zip_file: Path, checksum_file: Path) -> None:
         """Verify the downloaded file checksum"""
         try:
             # Read expected checksum
@@ -274,7 +271,7 @@ class XrayUpdateService:
             logger.error(f"Checksum verification failed: {e}")
             raise
 
-    async def _extract_and_install(self, zip_file: Path, target_path: str) -> None:
+    def _extract_and_install(self, zip_file: Path, target_path: str) -> None:
         """Extract zip file and install xray binary"""
         try:
             # Create target directory if it doesn't exist
@@ -319,7 +316,7 @@ class GeodataUpdateService:
         )
         self.timeout = 30.0
 
-    async def update_geodata(self, assets_folder: str) -> Dict[str, bool]:
+    def update_geodata(self, assets_folder: str) -> Dict[str, bool]:
         """Download and update geoip.dat and geosite.dat files"""
         try:
             if not assets_folder:
@@ -340,52 +337,49 @@ class GeodataUpdateService:
             with TemporaryDirectory() as temp_dir:
                 temp_path = Path(temp_dir)
 
-                async with AsyncClient(timeout=60.0) as client:
-                    for filename, url in files_to_download:
+                for filename, url in files_to_download:
+                    try:
+                        logger.info(f"Downloading {filename}")
+
+                        # Download file
+                        response = http_get(url, allow_redirects=True, timeout=60.0)
+                        response.raise_for_status()
+
+                        temp_file = temp_path / filename
+                        with open(temp_file, "wb") as f:
+                            f.write(response.content)
+
+                        # Download checksum if available
+                        checksum_url = f"{url}.sha256sum"
                         try:
-                            logger.info(f"Downloading {filename}")
+                            checksum_response = http_get(
+                                checksum_url, allow_redirects=True, timeout=60.0
+                            )
+                            checksum_response.raise_for_status()
 
-                            # Download file
-                            response = await client.get(url, follow_redirects=True)
-                            response.raise_for_status()
+                            checksum_file = temp_path / f"{filename}.sha256sum"
+                            with open(checksum_file, "w") as f:
+                                f.write(checksum_response.text)
 
-                            temp_file = temp_path / filename
-                            with open(temp_file, "wb") as f:
-                                f.write(response.content)
-
-                            # Download checksum if available
-                            checksum_url = f"{url}.sha256sum"
-                            try:
-                                checksum_response = await client.get(
-                                    checksum_url, follow_redirects=True
-                                )
-                                checksum_response.raise_for_status()
-
-                                checksum_file = temp_path / f"{filename}.sha256sum"
-                                with open(checksum_file, "w") as f:
-                                    f.write(checksum_response.text)
-
-                                # Verify checksum
-                                await self._verify_geodata_checksum(
-                                    temp_file, checksum_file
-                                )
-
-                            except Exception as e:
-                                logger.warning(
-                                    f"Checksum verification not available for {filename}: {e}"
-                                )
-
-                            # Move to target location
-                            target_file = os.join(assets_folder, filename)
-                            move(str(temp_file), target_file)
-                            os.chmod(target_file, 0o644)
-
-                            results[filename] = True
-                            logger.info(f"Successfully updated {filename}")
+                            # Verify checksum
+                            self._verify_geodata_checksum(temp_file, checksum_file)
 
                         except Exception as e:
-                            logger.error(f"Failed to update {filename}: {e}")
-                            results[filename] = False
+                            logger.warning(
+                                f"Checksum verification not available for {filename}: {e}"
+                            )
+
+                        # Move to target location
+                        target_file = os.path.join(assets_folder, filename)
+                        move(str(temp_file), target_file)
+                        os.chmod(target_file, 0o644)
+
+                        results[filename] = True
+                        logger.info(f"Successfully updated {filename}")
+
+                    except Exception as e:
+                        logger.error(f"Failed to update {filename}: {e}")
+                        results[filename] = False
 
             return results
 
@@ -393,9 +387,7 @@ class GeodataUpdateService:
             logger.error(f"Failed to update geodata: {e}")
             raise RuntimeError(f"Geodata update failed: {str(e)}")
 
-    async def _verify_geodata_checksum(
-        self, file_path: Path, checksum_file: Path
-    ) -> None:
+    def _verify_geodata_checksum(self, file_path: Path, checksum_file: Path) -> None:
         """Verify geodata file checksum"""
         try:
             checksum_content = checksum_file.read_text().strip()
