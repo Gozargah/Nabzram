@@ -21,7 +21,10 @@ import {
     SubscriptionRefreshResponse,
     ServerStartResponse,
     ServerStopResponse,
-    SettingsUpdateResponse
+    SettingsUpdateResponse,
+    AppearanceResponse,
+    AppearanceUpdate,
+    AppearanceUpdateResponse
 } from './types';
 import * as api from './services/api';
 import SubscriptionList from './components/SubscriptionList';
@@ -83,14 +86,23 @@ interface PywebviewApi {
     // Logs
     get_log_snapshot: (limit?: number) => Promise<any>;
     get_log_stream_batch: (since_ms?: number, limit?: number) => Promise<any>;
+
+    // Appearance
+    get_appearance: () => Promise<AppearanceResponse>;
+    update_appearance: (payload: AppearanceUpdate) => Promise<AppearanceUpdateResponse>;
 }
 
+interface FrontendApi {
+    setTheme: (themeName: string) => void;
+    setFont: (fontName: string) => void;
+}
 
 declare global {
     interface Window {
         pywebview?: {
             api: PywebviewApi
-        }
+        },
+        frontendApi?: FrontendApi
     }
 }
 

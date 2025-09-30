@@ -276,6 +276,37 @@ Error: global error model (e.g., assets folder not configured)
 
 ---
 
+Appearance
+1) get_appearance()
+Response:
+```json
+{
+  "theme": string | null,
+  "font": string | null
+}
+```
+
+2) update_appearance(payload)
+Payload:
+```json
+{
+  "theme"?: string,
+  "font"?: string
+}
+```
+Success response:
+```json
+{
+  "success": true,
+  "message": "Appearance updated successfully",
+  "theme": string | null,
+  "font": string | null
+}
+```
+Error: global error model (e.g., validation issues)
+
+---
+
 UI error-handling pattern
 ```ts
 async function callApp<T>(method: string, ...args: any[]): Promise<T> {

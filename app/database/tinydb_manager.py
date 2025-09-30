@@ -15,7 +15,12 @@ from uuid import UUID
 
 from tinydb import Query, TinyDB
 
-from app.models.database import ServerModel, SettingsModel, SubscriptionModel
+from app.models.database import (
+    AppearanceModel,
+    ServerModel,
+    SettingsModel,
+    SubscriptionModel,
+)
 from settings import DATA_DIR
 
 
@@ -85,9 +90,10 @@ class DatabaseManager:
         # Get tables
         self.subscriptions_table = self.db.table("subscriptions")
         self.settings_table = self.db.table("settings")
-
+        self.appearance_table = self.db.table("appearance")
         # Initialize settings if not exists
         self._init_settings()
+        self._init_appearance()
 
     @contextmanager
     def _db_operation(self):
@@ -125,6 +131,10 @@ class DatabaseManager:
     def _init_settings(self):
         """Ensure settings are initialized by delegating to get_settings()."""
         self.get_settings()
+
+    def _init_appearance(self):
+        """Ensure appearance are initialized by delegating to get_appearance()."""
+        self.get_appearance()
 
     def _serialize_for_db(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """Serialize data for database storage with Windows path safety"""
@@ -348,6 +358,25 @@ class DatabaseManager:
             self.settings_table.truncate()  # Clear existing settings
             self.settings_table.insert(data)
             return settings
+
+    def get_appearance(self) -> AppearanceModel:
+        """Get current appearance"""
+        with self._db_operation():
+            result = self.appearance_table.all()
+            if result:
+                appearance = AppearanceModel(**result[0])
+            else:
+                appearance = AppearanceModel()
+                self.update_appearance(appearance)
+            return appearance
+
+    def update_appearance(self, appearance: AppearanceModel) -> AppearanceModel:
+        """Update appearance"""
+        with self._db_operation():
+            data = appearance.model_dump()
+            self.appearance_table.truncate()  # Clear existing appearance
+            self.appearance_table.insert(data)
+            return appearance
 
     def close(self):
         """Close the database connection"""

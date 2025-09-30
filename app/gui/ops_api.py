@@ -5,7 +5,7 @@ Operations API - GUI adapter layer that delegates to ops modules.
 import logging
 from typing import Any, Dict, List
 
-from ..ops import logs, servers, settings, subscriptions, system, updates
+from app.ops import appearance, logs, servers, settings, subscriptions, system, updates
 
 
 class OperationsApi:
@@ -25,6 +25,15 @@ class OperationsApi:
 
     def update_settings(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         return settings.update_settings(payload)
+
+    # ──────────────────────────────
+    # Appearance
+    # ──────────────────────────────
+    def get_appearance(self) -> Dict[str, Any]:
+        return appearance.get_appearance()
+
+    def update_appearance(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        return appearance.update_appearance(payload)
 
     # ──────────────────────────────
     # Subscriptions

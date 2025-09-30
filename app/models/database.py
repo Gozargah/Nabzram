@@ -101,3 +101,10 @@ class ProcessInfo(BaseModel):
     @field_serializer("start_time")
     def serialize_start_time(self, value: datetime) -> str:
         return value.isoformat()
+
+
+class AppearanceModel(BaseModel):
+    """Settings model for database storage"""
+
+    theme: Optional[str] = Field(None, description="Theme")
+    font: Optional[str] = Field(None, description="Font")

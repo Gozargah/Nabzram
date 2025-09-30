@@ -22,7 +22,10 @@ import {
     ServerStopResponse,
     SettingsUpdateResponse,
     LogSnapshotResponse,
-    LogStreamBatchResponse
+    LogStreamBatchResponse,
+    AppearanceResponse,
+    AppearanceUpdate,
+    AppearanceUpdateResponse
 } from '../types';
 
 async function callApp<T>(method: string, ...args: any[]): Promise<T> {
@@ -108,4 +111,12 @@ export async function getLogSnapshot(limit?: number): Promise<LogSnapshotRespons
 
 export async function getLogStreamBatch(since_ms?: number, limit?: number): Promise<LogStreamBatchResponse> {
     return callApp<LogStreamBatchResponse>('get_log_stream_batch', since_ms, limit);
+}
+
+export async function getAppearance(): Promise<AppearanceResponse> {
+    return callApp<AppearanceResponse>('get_appearance');
+}
+
+export async function updateAppearance(data: AppearanceUpdate): Promise<AppearanceUpdateResponse> {
+    return callApp('update_appearance', data);
 }

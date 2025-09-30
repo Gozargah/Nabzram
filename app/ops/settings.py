@@ -8,6 +8,7 @@ from typing import Any, Dict
 from app.database import db
 from app.models.database import SettingsModel
 from app.models.schemas import SettingsUpdate
+from app.ops.utils import error_reply
 from app.services.process_service import process_manager
 
 logger = logging.getLogger(__name__)
@@ -30,7 +31,7 @@ def update_settings(payload: Dict[str, Any]) -> Dict[str, Any]:
     try:
         update = SettingsUpdate.model_validate(payload)
     except Exception as e:
-        return {"success": False, "message": f"Invalid settings: {str(e)}", "data": {}}
+        return error_reply(f"Invalid settings: {str(e)}")
 
     db.update_settings(SettingsModel.model_validate(update.model_dump()))
 

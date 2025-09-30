@@ -64,3 +64,8 @@ class SettingsUpdate(BaseModel):
         ):
             raise ValueError("SOCKS and HTTP ports cannot be the same")
         return self
+
+
+class AppearanceUpdate(BaseModel):
+    theme: Optional[str] = Field(None, description="Theme")
+    font: Optional[str] = Field(None, description="Font")

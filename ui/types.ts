@@ -183,8 +183,22 @@ export interface LogSnapshotResponse {
 }
 
 export interface LogStreamBatchResponse {
-  message: string;
+  message:string;
   server_id: string | null;
   logs: LogEntry[];
   next_since_ms: number | null;
+}
+
+export interface AppearanceResponse {
+  theme: string | null;
+  font: string | null;
+}
+
+export interface AppearanceUpdate {
+  theme?: string | null;
+  font?: string | null;
+}
+
+export interface AppearanceUpdateResponse extends AppearanceResponse {
+  message: string;
 }
