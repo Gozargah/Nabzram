@@ -1,4 +1,4 @@
-"""Subscription management service"""
+"""Subscription management service."""
 
 from copy import deepcopy
 from datetime import UTC, datetime
@@ -15,18 +15,18 @@ from app.models.schemas import SubscriptionCreate
 
 
 class SubscriptionService:
-    """Service for managing proxy subscriptions"""
+    """Service for managing proxy subscriptions."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.session = Session()
         self.session.timeout = 30.0
 
-    def close(self):
-        """Close HTTP session"""
+    def close(self) -> None:
+        """Close HTTP session."""
         self.session.close()
 
     def _normalize_url(self, url: str) -> str:
-        """Normalize subscription URL by appending /v2ray-json if missing"""
+        """Normalize subscription URL by appending /v2ray-json if missing."""
         url = str(url).rstrip("/")
 
         # Check if URL already ends with v2ray-json or similar
@@ -39,7 +39,7 @@ class SubscriptionService:
         self,
         userinfo_header: str,
     ) -> SubscriptionUserInfo | None:
-        """Parse subscription-userinfo header
+        """Parse subscription-userinfo header.
 
         Format: upload=0; download=862108477783; total=0; expire=0
         - upload + download = used traffic in bytes
@@ -78,18 +78,15 @@ class SubscriptionService:
                 expire=expire,
             )
 
-        except (ValueError, KeyError) as e:
+        except (ValueError, KeyError):
             # Log the error but don't fail the entire subscription fetch
-            print(
-                f"Warning: Failed to parse subscription-userinfo header '{userinfo_header}': {e}",
-            )
             return None
 
     def fetch_subscription_config(
         self,
         url: str,
     ) -> tuple[list[dict[str, Any]], SubscriptionUserInfo | None]:
-        """Fetch and parse subscription configuration and user info"""
+        """Fetch and parse subscription configuration and user info."""
         try:
             response = self.session.get(url)
             response.raise_for_status()
@@ -105,7 +102,8 @@ class SubscriptionService:
                 config_data = response.json()
             except JSONDecodeError:
                 # If not JSON, might be base64 encoded or other format
-                raise ValueError("Invalid subscription format: not valid JSON")
+                msg = "Invalid subscription format: not valid JSON"
+                raise ValueError(msg)
 
             # Handle different response formats
             configs = None
@@ -120,22 +118,23 @@ class SubscriptionService:
                 else:
                     configs = [config_data]
             else:
-                raise ValueError(
-                    "Invalid subscription format: unexpected data structure",
-                )
+                msg = "Invalid subscription format: unexpected data structure"
+                raise ValueError(msg)
 
             return configs, user_info
 
         except HTTPError:
-            raise ValueError(f"HTTP error {response.status_code}: {response.text}")
+            msg = f"HTTP error {response.status_code}: {response.text}"
+            raise ValueError(msg)
         except RequestException as e:
-            raise ValueError(f"Failed to fetch subscription: {e!s}")
+            msg = f"Failed to fetch subscription: {e!s}"
+            raise ValueError(msg)
 
     def _extract_server_info(
         self,
         config: dict[str, Any],
     ) -> tuple[str, dict[str, Any]]:
-        """Extract server remarks and clean config"""
+        """Extract server remarks and clean config."""
         # Try to find remarks in various possible locations
         remarks = "Unknown Server"
 
@@ -161,7 +160,7 @@ class SubscriptionService:
         socks_port: int | None,
         http_port: int | None,
     ) -> dict[str, Any]:
-        """Apply global port overrides to inbound configurations"""
+        """Apply global port overrides to inbound configurations."""
         if not config.get("inbounds"):
             return config
 
@@ -183,7 +182,7 @@ class SubscriptionService:
         socks_port: int | None = None,
         http_port: int | None = None,
     ) -> SubscriptionModel:
-        """Create a new subscription and fetch its servers"""
+        """Create a new subscription and fetch its servers."""
         # Normalize URL
         normalized_url = self._normalize_url(str(subscription_data.url))
 
@@ -212,7 +211,7 @@ class SubscriptionService:
             servers.append(server)
 
         # Create subscription model
-        subscription = SubscriptionModel(
+        return SubscriptionModel(
             id=uuid4(),
             name=subscription_data.name,
             url=normalized_url,
@@ -221,15 +220,13 @@ class SubscriptionService:
             user_info=user_info,
         )
 
-        return subscription
-
     def update_subscription_servers(
         self,
         subscription: SubscriptionModel,
         socks_port: int | None = None,
         http_port: int | None = None,
     ) -> SubscriptionModel:
-        """Update servers for an existing subscription"""
+        """Update servers for an existing subscription."""
         # Fetch fresh configuration and user info
         configs, user_info = self.fetch_subscription_config(subscription.url)
 

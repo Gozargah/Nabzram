@@ -1,4 +1,4 @@
-"""Update operations"""
+"""Update operations."""
 
 import logging
 from typing import Any
@@ -18,7 +18,7 @@ def get_xray_version_info() -> dict[str, Any]:
         current_version = xray_info.get("version")
         latest_version = service.get_latest_version()
         version_sizes = service.get_available_versions_with_sizes(limit=10)
-        available_versions = [{"version": ver, "size_bytes": version_sizes.get(ver)} for ver in version_sizes.keys()]
+        available_versions = [{"version": ver, "size_bytes": version_sizes.get(ver)} for ver in version_sizes]
         return {
             "current_version": current_version,
             "latest_version": latest_version,
@@ -71,7 +71,7 @@ def update_xray(payload: dict[str, Any]) -> dict[str, Any]:
                         )
 
             except Exception as e:
-                logger.error(f"Failed to restart server after xray update: {e}")
+                logger.exception(f"Failed to restart server after xray update: {e}")
 
             return {
                 "success": True,
@@ -113,7 +113,7 @@ def update_geodata() -> dict[str, Any]:
                 )
 
     except Exception as e:
-        logger.error(f"Failed to restart server after geodata update: {e}")
+        logger.exception(f"Failed to restart server after geodata update: {e}")
     return {
         "success": all_success,
         "message": message,

@@ -4,90 +4,90 @@
 class WindowApi:
     """API exposed to JavaScript for controlling the pywebview window."""
 
-    def __init__(self, window):
+    def __init__(self, window) -> None:
         self.window = window
         self._is_hidden = False
 
     # ──────────────────────────────
     # Basic controls
     # ──────────────────────────────
-    def show(self):
-        """Show the window"""
+    def show(self) -> None:
+        """Show the window."""
         self.window.show()
         self.window.restore()
         self._is_hidden = False
 
-    def hide(self):
-        """Hide window (close-to-tray behavior)"""
+    def hide(self) -> None:
+        """Hide window (close-to-tray behavior)."""
         self.window.hide()
         self._is_hidden = True
 
-    def minimize(self):
-        """Minimize to taskbar/dock"""
+    def minimize(self) -> None:
+        """Minimize to taskbar/dock."""
         self.window.minimize()
         self._is_hidden = True
 
-    def maximize(self):
-        """Maximize the window"""
+    def maximize(self) -> None:
+        """Maximize the window."""
         self.window.maximize()
         self._is_hidden = False
 
-    def restore(self):
-        """Restore from minimized/maximized"""
+    def restore(self) -> None:
+        """Restore from minimized/maximized."""
         self.window.restore()
         self._is_hidden = False
 
-    def close(self):
-        """Alias for hide() to support close-to-tray"""
+    def close(self) -> None:
+        """Alias for hide() to support close-to-tray."""
         self.hide()
         self._is_hidden = True
 
-    def toggle(self):
-        """Toggle the window"""
+    def toggle(self) -> None:
+        """Toggle the window."""
         if self._is_hidden:
             self.show()
             self.restore()
         else:
             self.hide()
 
-    def quit(self):
-        """Destroy the window"""
+    def quit(self) -> None:
+        """Destroy the window."""
         self.window.destroy()
 
     # ──────────────────────────────
     # Window states
     # ──────────────────────────────
     def is_visible(self) -> bool:
-        """Return True if window is visible"""
+        """Return True if window is visible."""
         return not self._is_hidden
 
     def is_focused(self) -> bool:
-        """Return True if window is focused"""
+        """Return True if window is focused."""
         return self.window.focus
 
     # ──────────────────────────────
     # Advanced controls
     # ──────────────────────────────
-    def toggle_fullscreen(self):
-        """Toggle fullscreen mode"""
+    def toggle_fullscreen(self) -> None:
+        """Toggle fullscreen mode."""
         self.window.toggle_fullscreen()
 
-    def set_on_top(self, value: bool):
-        """Keep window always on top"""
+    def set_on_top(self, value: bool) -> None:
+        """Keep window always on top."""
         self.window.on_top = bool(value)
 
-    def resize(self, width: int, height: int):
-        """Resize window to given dimensions"""
+    def resize(self, width: int, height: int) -> None:
+        """Resize window to given dimensions."""
         self.window.resize(width, height)
 
-    def move(self, x: int, y: int):
-        """Move window to (x, y) on screen"""
+    def move(self, x: int, y: int) -> None:
+        """Move window to (x, y) on screen."""
         self.window.move(x, y)
 
     def get_size(self) -> tuple[int, int]:
-        """Get current window size (width, height)"""
+        """Get current window size (width, height)."""
         return self.window.width, self.window.height
 
     def get_position(self) -> tuple[int, int]:
-        """Get current window position (x, y)"""
+        """Get current window position (x, y)."""
         return self.window.x, self.window.y

@@ -1,4 +1,4 @@
-"""Database models for TinyDB storage"""
+"""Database models for TinyDB storage."""
 
 from datetime import datetime
 from enum import Enum
@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field, field_serializer
 
 
 class ServerModel(BaseModel):
-    """Server model for database storage"""
+    """Server model for database storage."""
 
     id: UUID = Field(default_factory=uuid4)
     remarks: str = Field(..., description="Server remarks from subscription")
@@ -22,7 +22,7 @@ class ServerModel(BaseModel):
 
 
 class SubscriptionModel(BaseModel):
-    """Subscription model for database storage"""
+    """Subscription model for database storage."""
 
     id: UUID = Field(default_factory=uuid4)
     name: str = Field(..., description="Subscription name")
@@ -47,7 +47,7 @@ class SubscriptionModel(BaseModel):
 
 
 class SubscriptionUserInfo(BaseModel):
-    """Subscription user info model for traffic and expiry data"""
+    """Subscription user info model for traffic and expiry data."""
 
     used_traffic: int = Field(..., description="Total used traffic in bytes")
     total: int | None = Field(
@@ -65,7 +65,7 @@ class SubscriptionUserInfo(BaseModel):
 
 
 class SettingsModel(BaseModel):
-    """Settings model for database storage"""
+    """Settings model for database storage."""
 
     socks_port: int | None = Field(None, description="Global SOCKS port override")
     http_port: int | None = Field(None, description="Global HTTP port override")
@@ -89,7 +89,7 @@ class SettingsModel(BaseModel):
 
 
 class ProcessInfo(BaseModel):
-    """Process information for running servers (not stored in database)"""
+    """Process information for running servers (not stored in database)."""
 
     server_id: UUID
     subscription_id: UUID
@@ -107,7 +107,7 @@ class ProcessInfo(BaseModel):
 
 
 class AppearanceModel(BaseModel):
-    """Settings model for database storage"""
+    """Settings model for database storage."""
 
     theme: str | None = Field(None, description="Theme")
     font: str | None = Field(None, description="Font")

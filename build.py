@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Nuitka build script for Nabzram
-This script builds the Nabzram application with Nuitka compiler
+This script builds the Nabzram application with Nuitka compiler.
 """
 
 import importlib.util
@@ -11,7 +11,7 @@ from pathlib import Path
 
 
 def run_command(cmd, cwd=None):
-    """Run a command and stream the result in real time"""
+    """Run a command and stream the result in real time."""
     print(f"Running: {' '.join(cmd)}")
     result = subprocess.run(cmd, check=False, cwd=cwd, text=True)
     if result.returncode != 0:
@@ -20,8 +20,8 @@ def run_command(cmd, cwd=None):
     return result
 
 
-def build_frontend():
-    """Build the React frontend"""
+def build_frontend() -> None:
+    """Build the React frontend."""
     print("Building React frontend...")
     ui_dir = Path("ui")
 
@@ -35,8 +35,8 @@ def build_frontend():
     print("Frontend build completed!")
 
 
-def build_with_nuitka():
-    """Build the Python application with Nuitka"""
+def build_with_nuitka() -> None:
+    """Build the Python application with Nuitka."""
     print("Building with Nuitka...")
 
     # Nuitka command
@@ -93,8 +93,8 @@ def build_with_nuitka():
     print("Nuitka build completed!")
 
 
-def main():
-    """Main build function"""
+def main() -> None:
+    """Main build function."""
     print("Starting Nabzram build process...")
 
     # Check if Nuitka is installed

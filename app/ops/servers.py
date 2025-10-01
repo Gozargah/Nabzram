@@ -1,4 +1,4 @@
-"""Server operations"""
+"""Server operations."""
 
 from typing import Any
 
@@ -69,6 +69,7 @@ def stop_server() -> dict[str, Any]:
             "status": "stopped",
         }
         return error_reply("Failed to stop server")
+    return None
 
 
 def get_server_status() -> dict[str, Any]:

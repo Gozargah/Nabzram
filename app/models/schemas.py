@@ -1,4 +1,4 @@
-"""Pydantic models for API request/response schemas"""
+"""Pydantic models for API request/response schemas."""
 
 from enum import Enum
 
@@ -42,7 +42,8 @@ class SettingsUpdate(BaseModel):
         if v is None:
             return v
         if not (1 <= v <= 65535):
-            raise ValueError("SOCKS port must be between 1 and 65535")
+            msg = "SOCKS port must be between 1 and 65535"
+            raise ValueError(msg)
         return v
 
     @field_validator("http_port")
@@ -51,13 +52,15 @@ class SettingsUpdate(BaseModel):
         if v is None:
             return v
         if not (1 <= v <= 65535):
-            raise ValueError("HTTP port must be between 1 and 65535")
+            msg = "HTTP port must be between 1 and 65535"
+            raise ValueError(msg)
         return v
 
     @model_validator(mode="after")
     def validate_port_conflict(self):
         if self.socks_port is not None and self.http_port is not None and self.socks_port == self.http_port:
-            raise ValueError("SOCKS and HTTP ports cannot be the same")
+            msg = "SOCKS and HTTP ports cannot be the same"
+            raise ValueError(msg)
         return self
 
 

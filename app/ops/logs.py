@@ -1,4 +1,4 @@
-"""Log operations"""
+"""Log operations."""
 
 from typing import Any
 

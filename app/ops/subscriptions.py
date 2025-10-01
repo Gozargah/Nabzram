@@ -1,4 +1,4 @@
-"""Subscription operations"""
+"""Subscription operations."""
 
 from typing import Any
 

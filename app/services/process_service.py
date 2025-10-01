@@ -1,4 +1,4 @@
-"""Xray-core process management service"""
+"""Xray-core process management service."""
 
 import json
 import logging
@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 
 
 class UUIDEncoder(json.JSONEncoder):
-    """Custom JSON encoder that handles UUID objects"""
+    """Custom JSON encoder that handles UUID objects."""
 
     def default(self, obj):
         if isinstance(obj, UUID):
@@ -37,9 +37,9 @@ class UUIDEncoder(json.JSONEncoder):
 
 
 class ProcessManager:
-    """Manages xray-core processes"""
+    """Manages xray-core processes."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.running_processes: dict[UUID, ProcessInfo] = {}
         self.process_handles: dict[UUID, subprocess.Popen] = {}
         self.log_queues: dict[UUID, Queue] = {}
@@ -47,7 +47,7 @@ class ProcessManager:
         self.current_server_id: UUID | None = None  # Track the currently running server
 
     def get_effective_xray_binary(self) -> str:
-        """Get the effective xray binary path from database settings or system PATH"""
+        """Get the effective xray binary path from database settings or system PATH."""
         try:
             db_settings = db.get_settings()
             if db_settings.xray_binary:
@@ -67,7 +67,7 @@ class ProcessManager:
         return "/usr/bin/xray"
 
     def get_xray_assets_folder(self) -> str | None:
-        """Get the xray assets folder from database settings"""
+        """Get the xray assets folder from database settings."""
         try:
             db_settings = db.get_settings()
             if db_settings.xray_assets_folder:
@@ -81,7 +81,7 @@ class ProcessManager:
         return None
 
     def check_xray_availability(self) -> dict[str, any]:
-        """Check if xray-core is available and get version info"""
+        """Check if xray-core is available and get version info."""
         try:
             # Try to run xray version command
             xray_binary = self.get_effective_xray_binary()
@@ -175,7 +175,7 @@ class ProcessManager:
         socks_port: int | None = None,
         http_port: int | None = None,
     ) -> tuple[bool, str | None]:
-        """Start a single server (stops any currently running server first)
+        """Start a single server (stops any currently running server first).
 
         Returns:
             Tuple[bool, Optional[str]]: (success, error_message)
@@ -207,7 +207,7 @@ class ProcessManager:
         socks_port: int | None,
         http_port: int | None,
     ) -> dict:
-        """Apply global port overrides to inbound configurations at runtime"""
+        """Apply global port overrides to inbound configurations at runtime."""
         if not config.get("inbounds") or (not socks_port and not http_port):
             return config
         modified_config = deepcopy(config)
@@ -227,7 +227,7 @@ class ProcessManager:
         return modified_config
 
     def _apply_log_level_override(self, config: dict) -> dict:
-        """Apply global log level override to xray configuration"""
+        """Apply global log level override to xray configuration."""
         try:
             db_settings = db.get_settings()
             if db_settings.xray_log_level:
@@ -258,7 +258,7 @@ class ProcessManager:
         socks_port: int | None = None,
         http_port: int | None = None,
     ) -> tuple[bool, str | None]:
-        """Start a server with the given configuration and optional port overrides
+        """Start a server with the given configuration and optional port overrides.
 
         Returns:
             Tuple[bool, Optional[str]]: (success, error_message)
@@ -376,7 +376,7 @@ class ProcessManager:
 
         except Exception as e:
             error_msg = str(e)
-            logger.error(f"Failed to start server {server_id}: {error_msg}")
+            logger.exception(f"Failed to start server {server_id}: {error_msg}")
 
             # Clean up on exception
             if server_id in self.running_processes:
@@ -392,7 +392,7 @@ class ProcessManager:
             return False, f"Failed to start server: {error_msg}"
 
     def stop_server(self, server_id: UUID) -> bool:
-        """Stop a running server"""
+        """Stop a running server."""
         if server_id not in self.running_processes:
             logger.warning(f"Server {server_id} is not running")
             return False
@@ -429,7 +429,7 @@ class ProcessManager:
             return True
 
         except Exception as e:
-            logger.error(f"Failed to stop server {server_id}: {e}")
+            logger.exception(f"Failed to stop server {server_id}: {e}")
             return False
 
     def restart_server(
@@ -440,7 +440,7 @@ class ProcessManager:
         socks_port: int | None = None,
         http_port: int | None = None,
     ) -> tuple[bool, str | None]:
-        """Restart a server with optional port overrides
+        """Restart a server with optional port overrides.
 
         Returns:
             Tuple[bool, Optional[str]]: (success, error_message)
@@ -460,7 +460,7 @@ class ProcessManager:
         )
 
     def is_server_running(self, server_id: UUID) -> bool:
-        """Check if a server is currently running"""
+        """Check if a server is currently running."""
         if server_id not in self.running_processes:
             return False
 
@@ -484,16 +484,16 @@ class ProcessManager:
         return True
 
     def get_process_info(self, server_id: UUID) -> ProcessInfo | None:
-        """Get process information for a server"""
+        """Get process information for a server."""
         return self.running_processes.get(server_id)
 
     def get_server_ports(self, server_id: UUID) -> list[int]:
-        """Get the allocated ports for a server (legacy method for backward compatibility)"""
+        """Get the allocated ports for a server (legacy method for backward compatibility)."""
         port_info = self.get_server_port_info(server_id)
         return [port["port"] for port in port_info]
 
     def get_server_port_info(self, server_id: UUID) -> list[dict[str, any]]:
-        """Get detailed port information including protocols for a server"""
+        """Get detailed port information including protocols for a server."""
         if server_id not in self.running_processes:
             return []
 
@@ -517,7 +517,7 @@ class ProcessManager:
         return port_info
 
     def _extract_protocol_from_tag(self, inbound: dict) -> str:
-        """Extract protocol type from configuration"""
+        """Extract protocol type from configuration."""
         # Check inbound protocol field if available
         if "protocol" in inbound:
             return inbound["protocol"]
@@ -527,35 +527,35 @@ class ProcessManager:
 
     # Single server convenience methods
     def get_current_server_id(self) -> UUID | None:
-        """Get the currently running server ID"""
+        """Get the currently running server ID."""
         return self.current_server_id
 
     def is_any_server_running(self) -> bool:
-        """Check if any server is currently running"""
+        """Check if any server is currently running."""
         return self.current_server_id is not None and self.is_server_running(
             self.current_server_id,
         )
 
     def get_current_server_info(self) -> ProcessInfo | None:
-        """Get process information for the currently running server"""
+        """Get process information for the currently running server."""
         if self.current_server_id:
             return self.get_process_info(self.current_server_id)
         return None
 
     def get_current_server_ports(self) -> list[int]:
-        """Get ports for the currently running server"""
+        """Get ports for the currently running server."""
         if self.current_server_id:
             return self.get_server_ports(self.current_server_id)
         return []
 
     def get_current_server_port_info(self) -> list[dict[str, any]]:
-        """Get detailed port information for the currently running server"""
+        """Get detailed port information for the currently running server."""
         if self.current_server_id:
             return self.get_server_port_info(self.current_server_id)
         return []
 
     def stop_current_server(self) -> bool:
-        """Stop the currently running server"""
+        """Stop the currently running server."""
         if self.current_server_id:
             return self.stop_server(self.current_server_id)
         return True  # No server running, consider it success
@@ -567,7 +567,7 @@ class ProcessManager:
         socks_port: int | None = None,
         http_port: int | None = None,
     ) -> tuple[bool, str | None]:
-        """Restart the currently running server with new config and port overrides
+        """Restart the currently running server with new config and port overrides.
 
         Returns:
             Tuple[bool, Optional[str]]: (success, error_message)
@@ -583,8 +583,8 @@ class ProcessManager:
             )
         return False, "No server is currently running"
 
-    def _read_process_logs(self, server_id: UUID, process: subprocess.Popen):
-        """Read logs from a process and queue them"""
+    def _read_process_logs(self, server_id: UUID, process: subprocess.Popen) -> None:
+        """Read logs from a process and queue them."""
         try:
             while True:
                 # Use readline to avoid blocking
@@ -612,12 +612,12 @@ class ProcessManager:
                         pass
 
         except Exception as e:
-            logger.error(f"Error reading logs for server {server_id}: {e}")
+            logger.exception(f"Error reading logs for server {server_id}: {e}")
         finally:
             logger.debug(f"Log reading thread for server {server_id} ended")
 
     def get_server_logs(self, server_id: UUID) -> Generator[dict]:
-        """Get real-time logs for a specific server"""
+        """Get real-time logs for a specific server."""
         if server_id not in self.log_queues:
             return
 
@@ -635,10 +635,10 @@ class ProcessManager:
                         break
                     continue
         except Exception as e:
-            logger.error(f"Error streaming logs for server {server_id}: {e}")
+            logger.exception(f"Error streaming logs for server {server_id}: {e}")
 
     def get_current_server_logs(self) -> Generator[dict]:
-        """Get real-time logs from the currently running server"""
+        """Get real-time logs from the currently running server."""
         if self.current_server_id:
             for log_entry in self.get_server_logs(self.current_server_id):
                 yield log_entry
@@ -652,7 +652,7 @@ class ProcessManager:
                     break
 
     def get_log_snapshot(self, server_id: UUID, limit: int = 100) -> list[dict]:
-        """Get a snapshot of recent logs from the queue"""
+        """Get a snapshot of recent logs from the queue."""
         if server_id not in self.log_queues:
             return []
 
@@ -680,7 +680,7 @@ class ProcessManager:
         since_ms: int,
         limit: int = 200,
     ) -> list[dict]:
-        """Get logs since a timestamp from the queue"""
+        """Get logs since a timestamp from the queue."""
         if server_id not in self.log_queues:
             return []
 
@@ -706,8 +706,8 @@ class ProcessManager:
 
         return logs
 
-    def shutdown_all(self):
-        """Shutdown all running servers"""
+    def shutdown_all(self) -> None:
+        """Shutdown all running servers."""
         server_ids = list(self.running_processes.keys())
         for server_id in server_ids:
             self.stop_server(server_id)
@@ -715,16 +715,17 @@ class ProcessManager:
         logger.info("All servers stopped")
 
     def _find_available_port(self, start_port: int = 10800) -> int:
-        """Find an available port starting from start_port"""
+        """Find an available port starting from start_port."""
         port = start_port
         while port < 65535:
             if self._is_port_available(port):
                 return port
             port += 1
-        raise RuntimeError("No available ports found")
+        msg = "No available ports found"
+        raise RuntimeError(msg)
 
     def _is_port_available(self, port: int) -> bool:
-        """Check if a port is available for binding"""
+        """Check if a port is available for binding."""
         try:
             with socket(AF_INET, SOCK_STREAM) as sock:
                 sock.bind(("127.0.0.1", port))
@@ -733,7 +734,7 @@ class ProcessManager:
             return False
 
     def _allocate_random_ports(self) -> tuple[int, int]:
-        """Allocate random available ports for SOCKS and HTTP"""
+        """Allocate random available ports for SOCKS and HTTP."""
         # Find random starting points to avoid conflicts
         socks_start = randint(10800, 20000)
         http_start = randint(20001, 30000)
@@ -755,7 +756,7 @@ class ProcessManager:
         test_timeout: int = 6,
     ) -> tuple[bool, int | None, str | None, int, int]:
         """Test server connectivity by starting it on random ports and making HTTP request
-        Returns: (success, ping_ms, error_message, socks_port, http_port)
+        Returns: (success, ping_ms, error_message, socks_port, http_port).
         """
         socks_port, http_port = self._allocate_random_ports()
 
@@ -827,7 +828,7 @@ class ProcessManager:
         test_timeout: int = 6,
     ) -> list[dict]:
         """Test all servers in a subscription sequentially
-        Returns list of test results
+        Returns list of test results.
         """
         results = []
 

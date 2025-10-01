@@ -1,4 +1,4 @@
-"""System operations"""
+"""System operations."""
 
 from typing import Any
 

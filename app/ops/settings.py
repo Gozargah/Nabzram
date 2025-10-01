@@ -1,4 +1,4 @@
-"""Settings operations"""
+"""Settings operations."""
 
 import logging
 from typing import Any
@@ -52,7 +52,7 @@ def update_settings(payload: dict[str, Any]) -> dict[str, Any]:
                 if ok:
                     logger.info("Server restarted after settings update")
     except Exception as e:
-        logger.error(f"Failed to restart server after settings update: {e}")
+        logger.exception(f"Failed to restart server after settings update: {e}")
 
     s = db.get_settings()
     return {

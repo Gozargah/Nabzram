@@ -15,7 +15,7 @@ from settings import APP_ROOT, DATA_DIR, DEBUG
 class GuiManager:
     """GUI manager for Nabzram application."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.system = platform.system().lower()
         self.storage_path = str(DATA_DIR / "storage")
         self.icon_path = self._get_icon_path()
@@ -43,7 +43,7 @@ class GuiManager:
         """Get the easy drag setting for the current platform."""
         return self.system not in ("windows", "darwin")
 
-    def _setup_environment(self):
+    def _setup_environment(self) -> None:
         """Setup environment variables for the current platform."""
         if self.system == "linux":
             os.environ["WEBKIT_DISABLE_COMPOSITING_MODE"] = "1"
@@ -51,10 +51,10 @@ class GuiManager:
     def _setup_tray(self, window, api: WindowApi):
         """Setup system tray with left click = toggle, right click = menu."""
 
-        def toggle(icon, item=None):
+        def toggle(icon, item=None) -> None:
             api.toggle()
 
-        def on_quit(icon, item):
+        def on_quit(icon, item) -> None:
             api.quit()
             icon.stop()
 
@@ -84,12 +84,12 @@ class GuiManager:
             background_color="#020817",
         )
 
-    def _register_api(self, window: webview.Window, api: Any):
+    def _register_api(self, window: webview.Window, api: Any) -> None:
         """Register API methods with the webview window."""
         methods = [getattr(api, name) for name in dir(api) if not name.startswith("_") and callable(getattr(api, name))]
         window.expose(*methods)
 
-    def start_gui(self, window: webview.Window):
+    def start_gui(self, window: webview.Window) -> None:
         """Start the GUI application."""
         self._register_api(window, WindowApi(window))
         self._register_api(window, OperationsApi(window))

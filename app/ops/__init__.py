@@ -1,4 +1,4 @@
-"""App operations module"""
+"""App operations module."""
 
 from . import logs, servers, settings, subscriptions, system, updates, utils
 

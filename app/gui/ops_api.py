@@ -7,9 +7,9 @@ from app.ops import appearance, logs, servers, settings, subscriptions, system, 
 
 
 class OperationsApi:
-    """Full in-process Operations API"""
+    """Full in-process Operations API."""
 
-    def __init__(self, window):
+    def __init__(self, window) -> None:
         self.window = window
         self.logger = logging.getLogger(__name__)
 
@@ -97,7 +97,7 @@ class OperationsApi:
 
     def get_log_stream_batch(
         self,
-        since_ms: int = None,
+        since_ms: int | None = None,
         limit: int = 200,
     ) -> dict[str, Any]:
         return logs.get_log_stream_batch(since_ms, limit)
