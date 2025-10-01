@@ -1,6 +1,4 @@
-"""
-Common utilities for ops modules.
-"""
+"""Common utilities for ops modules."""
 
 import logging
 import os
@@ -26,7 +24,7 @@ def to_uuid(value: Any) -> UUID:
     return value if isinstance(value, UUID) else UUID(str(value))
 
 
-def error_reply(message: str, data: Dict[str, Any] | None = None) -> Dict[str, Any]:
+def error_reply(message: str, data: dict[str, Any] | None = None) -> dict[str, Any]:
     """Create error response."""
     return {"success": False, "message": message, "data": data or {}}
 
@@ -57,9 +55,7 @@ def set_socks_system_proxy(ip_address, port):
                 winreg.KEY_WRITE,
             )
             winreg.SetValueEx(key, "ProxyEnable", 0, winreg.REG_DWORD, 1)
-            winreg.SetValueEx(
-                key, "ProxyServer", 0, winreg.REG_SZ, f"socks={proxy_str}"
-            )
+            winreg.SetValueEx(key, "ProxyServer", 0, winreg.REG_SZ, f"socks={proxy_str}")
             winreg.SetValueEx(key, "ProxyOverride", 0, winreg.REG_SZ, "<local>")
             winreg.CloseKey(key)
 
@@ -74,11 +70,7 @@ def set_socks_system_proxy(ip_address, port):
     # --- macOS ---
     elif os_name == "Darwin":
         try:
-            services = (
-                subprocess.check_output(["networksetup", "-listallnetworkservices"])
-                .decode()
-                .splitlines()
-            )
+            services = subprocess.check_output(["networksetup", "-listallnetworkservices"]).decode().splitlines()
             for service in services:
                 if not service.strip() or service.startswith("*"):
                     continue
@@ -216,11 +208,7 @@ def clear_socks_system_proxy():
     # --- macOS ---
     elif os_name == "Darwin":
         try:
-            services = (
-                subprocess.check_output(["networksetup", "-listallnetworkservices"])
-                .decode()
-                .splitlines()
-            )
+            services = subprocess.check_output(["networksetup", "-listallnetworkservices"]).decode().splitlines()
             for service in services:
                 if not service.strip() or service.startswith("*"):
                     continue
@@ -298,9 +286,7 @@ def clear_socks_system_proxy():
             except Exception as e:
                 logging.warning(f"GSettings clear failed: {e}")
 
-        logging.warning(
-            "No GUI proxy manager found, only environment variables cleared."
-        )
+        logging.warning("No GUI proxy manager found, only environment variables cleared.")
 
     else:
         logging.warning(f"Unsupported OS: {os_name}")

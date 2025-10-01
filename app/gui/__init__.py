@@ -15,7 +15,7 @@ from settings import APP_ROOT, DATA_DIR, DEBUG
 class GuiManager:
     """GUI manager for Nabzram application."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.system = platform.system().lower()
         self.storage_path = str(DATA_DIR / "storage")
         self.icon_path = self._get_icon_path()
@@ -27,25 +27,23 @@ class GuiManager:
         """Get the appropriate icon path for the current platform."""
         if self.system == "windows":
             return os.path.abspath(APP_ROOT / "assets" / "icon.ico")
-        elif self.system == "darwin":
+        if self.system == "darwin":
             return os.path.abspath(APP_ROOT / "assets" / "icon.icns")
-        else:
-            return os.path.abspath(APP_ROOT / "assets" / "icon.png")
+        return os.path.abspath(APP_ROOT / "assets" / "icon.png")
 
     def _get_gui_type(self) -> str:
         """Get the appropriate GUI type for the current platform."""
         if self.system == "windows":
             return "edgechromium"
-        elif self.system == "darwin":
+        if self.system == "darwin":
             return "cocoa"
-        else:
-            return "gtk"
+        return "gtk"
 
     def _get_easy_drag(self) -> bool:
         """Get the easy drag setting for the current platform."""
         return self.system not in ("windows", "darwin")
 
-    def _setup_environment(self):
+    def _setup_environment(self) -> None:
         """Setup environment variables for the current platform."""
         if self.system == "linux":
             os.environ["WEBKIT_DISABLE_COMPOSITING_MODE"] = "1"
@@ -53,10 +51,10 @@ class GuiManager:
     def _setup_tray(self, window, api: WindowApi):
         """Setup system tray with left click = toggle, right click = menu."""
 
-        def toggle(icon, item=None):
+        def toggle(icon, item=None) -> None:
             api.toggle()
 
-        def on_quit(icon, item):
+        def on_quit(icon, item) -> None:
             api.quit()
             icon.stop()
 
@@ -87,13 +85,9 @@ class GuiManager:
             **kwargs,
         )
 
-    def _register_api(self, window: webview.Window, api: Any):
+    def _register_api(self, window: webview.Window, api: Any) -> None:
         """Register API methods with the webview window."""
-        methods = [
-            getattr(api, name)
-            for name in dir(api)
-            if not name.startswith("_") and callable(getattr(api, name))
-        ]
+        methods = [getattr(api, name) for name in dir(api) if not name.startswith("_") and callable(getattr(api, name))]
         window.expose(*methods)
 
     def start_tray(self, window: webview.Window):
@@ -102,7 +96,6 @@ class GuiManager:
 
     def start_gui(self, window: webview.Window, **kwargs):
         """Start the GUI application."""
-
         self._register_api(window, WindowApi(window))
         self._register_api(window, OperationsApi(window))
 

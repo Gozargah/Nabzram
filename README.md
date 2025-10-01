@@ -1,6 +1,6 @@
 <div align="center">
   <img src="assets/icon.png" alt="Nabzram" width="128"/>
-  
+
 # Nabzram
 
 </div>
@@ -57,6 +57,7 @@ No installation required - just run the executable!
 ### Prerequisites
 
 - **Python 3.12+**
+- **UV**: For managing Python versions and dependencies
 - **Xray-core**: Optional - app will download it for you if not found
 - **Bun**: For frontend development (recommended) or Node.js
 
@@ -105,6 +106,10 @@ brew install xray
 
 **Note**: If Xray-core is not installed, the app will prompt you to download it automatically on first run.
 
+### Install UV
+
+Follow instructions at [astral.sh/uv](https://astral.sh/uv/)
+
 ### Python Installation
 
 1. **Clone the repository**
@@ -115,12 +120,12 @@ brew install xray
 
 2. **Install Python dependencies**
    ```bash
-   pip install -r requirements.txt
+   uv sync
    ```
 
 3. **Run the application**
    ```bash
-   python main.py
+   uv run main.py
    ```
 
 ## Development
@@ -143,7 +148,7 @@ The backend uses a modular architecture with operations and services:
 
 ```bash
 # Run the main application
-python main.py
+uv run main.py
 
 # The application uses pywebview to create a native desktop window
 # No separate server process needed - everything runs in the main process
@@ -156,7 +161,7 @@ python main.py
 Build a standalone executable using Nuitka:
 
 ```bash
-python build.py
+uv run build.py
 ```
 
 This will:

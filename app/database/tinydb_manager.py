@@ -1,6 +1,4 @@
-"""
-TinyDB database manager for persistent storage
-"""
+"""TinyDB database manager for persistent storage."""
 
 import os
 import platform
@@ -10,7 +8,7 @@ import threading
 from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 from uuid import UUID
 
 from tinydb import Query, TinyDB
@@ -25,12 +23,12 @@ from settings import DATA_DIR
 
 
 def check_xray_command_available() -> tuple[bool, str | None]:
-    """
-    Check if the 'xray' command is available on the system.
+    """Check if the 'xray' command is available on the system.
     Works on Linux, Windows, and macOS.
 
     Returns:
         tuple: (is_available, full_path) where is_available is bool and full_path is str or None
+
     """
     try:
         # Use shutil.which to find the xray command in PATH
@@ -42,11 +40,9 @@ def check_xray_command_available() -> tuple[bool, str | None]:
             if platform.system() == "Windows":
                 kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW
 
-            result = subprocess.run(["xray", "--version"], **kwargs)
+            result = subprocess.run(["xray", "--version"], check=False, **kwargs)
             # Check if the output contains xray-core information
-            is_xray_core = (
-                "xray-core" in result.stdout.lower() or "xray" in result.stdout.lower()
-            )
+            is_xray_core = "xray-core" in result.stdout.lower() or "xray" in result.stdout.lower()
             return is_xray_core, xray_path if is_xray_core else None
         return False, None
     except (
@@ -58,8 +54,7 @@ def check_xray_command_available() -> tuple[bool, str | None]:
 
 
 def get_xray_data_directory() -> Path:
-    """
-    Get the appropriate directory for storing xray binary and assets.
+    """Get the appropriate directory for storing xray binary and assets.
     Uses platformdirs to get the correct user data directory for each platform.
     """
     return DATA_DIR / "xray"
@@ -75,10 +70,10 @@ def get_default_xray_binary_filename() -> str:
 
 
 class DatabaseManager:
-    """Manages TinyDB operations for subscriptions, servers, and settings"""
+    """Manages TinyDB operations for subscriptions, servers, and settings."""
 
-    def __init__(self, db_path: str = str(DATA_DIR / "db.json")):
-        """Initialize the database manager"""
+    def __init__(self, db_path: str = str(DATA_DIR / "db.json")) -> None:
+        """Initialize the database manager."""
         self.db_path = db_path
         self._lock = threading.RLock()  # Reentrant lock for thread safety
 
@@ -97,7 +92,7 @@ class DatabaseManager:
 
     @contextmanager
     def _db_operation(self):
-        """Context manager for thread-safe database operations"""
+        """Context manager for thread-safe database operations."""
         self._lock.acquire()
         try:
             yield
@@ -105,20 +100,19 @@ class DatabaseManager:
             self._lock.release()
 
     def _escape_json_path(self, path: str) -> str:
-        """Escape Windows path characters that can break JSON parsing"""
+        """Escape Windows path characters that can break JSON parsing."""
         if not isinstance(path, str):
             return path
 
         # Replace backslashes with forward slashes for cross-platform compatibility
-        escaped_path = path.replace("\\", "/")
+        return path.replace("\\", "/")
 
         # Handle problematic characters that can break JSON
         # Note: Python's json module handles most escaping automatically,
         # but we normalize paths to prevent issues
-        return escaped_path
 
     def _unescape_json_path(self, path: str) -> str:
-        """Unescape path for Windows compatibility"""
+        """Unescape path for Windows compatibility."""
         if not isinstance(path, str):
             return path
 
@@ -128,16 +122,16 @@ class DatabaseManager:
 
         return path
 
-    def _init_settings(self):
+    def _init_settings(self) -> None:
         """Ensure settings are initialized by delegating to get_settings()."""
         self.get_settings()
 
-    def _init_appearance(self):
+    def _init_appearance(self) -> None:
         """Ensure appearance are initialized by delegating to get_appearance()."""
         self.get_appearance()
 
-    def _serialize_for_db(self, data: Dict[str, Any]) -> Dict[str, Any]:
-        """Serialize data for database storage with Windows path safety"""
+    def _serialize_for_db(self, data: dict[str, Any]) -> dict[str, Any]:
+        """Serialize data for database storage with Windows path safety."""
         if isinstance(data, dict):
             result = {}
             for key, value in data.items():
@@ -157,17 +151,14 @@ class DatabaseManager:
                 elif isinstance(value, dict):
                     result[key] = self._serialize_for_db(value)
                 elif isinstance(value, list):
-                    result[key] = [
-                        self._serialize_for_db(item) if isinstance(item, dict) else item
-                        for item in value
-                    ]
+                    result[key] = [self._serialize_for_db(item) if isinstance(item, dict) else item for item in value]
                 else:
                     result[key] = value
             return result
         return data
 
-    def _deserialize_from_db(self, data: Dict[str, Any]) -> Dict[str, Any]:
-        """Deserialize data from database storage with Windows path handling"""
+    def _deserialize_from_db(self, data: dict[str, Any]) -> dict[str, Any]:
+        """Deserialize data from database storage with Windows path handling."""
         if isinstance(data, dict):
             result = {}
             for key, value in data.items():
@@ -182,7 +173,8 @@ class DatabaseManager:
                     except ValueError:
                         result[key] = None
                 elif key in ["xray_binary", "xray_assets_folder"] and isinstance(
-                    value, str
+                    value,
+                    str,
                 ):
                     # Unescape paths for Windows compatibility
                     result[key] = self._unescape_json_path(value)
@@ -190,11 +182,12 @@ class DatabaseManager:
                     # Handle nested datetime in user_info.expire
                     user_info_data = self._deserialize_from_db(value)
                     if "expire" in user_info_data and isinstance(
-                        user_info_data["expire"], str
+                        user_info_data["expire"],
+                        str,
                     ):
                         try:
                             user_info_data["expire"] = datetime.fromisoformat(
-                                user_info_data["expire"]
+                                user_info_data["expire"],
                             )
                         except ValueError:
                             user_info_data["expire"] = None
@@ -203,10 +196,7 @@ class DatabaseManager:
                     result[key] = self._deserialize_from_db(value)
                 elif isinstance(value, list):
                     result[key] = [
-                        self._deserialize_from_db(item)
-                        if isinstance(item, dict)
-                        else item
-                        for item in value
+                        self._deserialize_from_db(item) if isinstance(item, dict) else item for item in value
                     ]
                 else:
                     result[key] = value
@@ -215,14 +205,14 @@ class DatabaseManager:
 
     # Subscription operations
     def create_subscription(self, subscription: SubscriptionModel) -> SubscriptionModel:
-        """Create a new subscription"""
+        """Create a new subscription."""
         with self._db_operation():
             data = self._serialize_for_db(subscription.model_dump())
             self.subscriptions_table.insert(data)
             return subscription
 
-    def get_subscription(self, subscription_id: UUID) -> Optional[SubscriptionModel]:
-        """Get a subscription by ID"""
+    def get_subscription(self, subscription_id: UUID) -> SubscriptionModel | None:
+        """Get a subscription by ID."""
         with self._db_operation():
             query = Query()
             result = self.subscriptions_table.search(query.id == str(subscription_id))
@@ -231,8 +221,8 @@ class DatabaseManager:
                 return SubscriptionModel(**data)
             return None
 
-    def get_all_subscriptions(self) -> List[SubscriptionModel]:
-        """Get all subscriptions"""
+    def get_all_subscriptions(self) -> list[SubscriptionModel]:
+        """Get all subscriptions."""
         with self._db_operation():
             results = self.subscriptions_table.all()
             subscriptions = []
@@ -242,9 +232,11 @@ class DatabaseManager:
             return subscriptions
 
     def update_subscription(
-        self, subscription_id: UUID, updates: Dict[str, Any]
-    ) -> Optional[SubscriptionModel]:
-        """Update a subscription"""
+        self,
+        subscription_id: UUID,
+        updates: dict[str, Any],
+    ) -> SubscriptionModel | None:
+        """Update a subscription."""
         with self._db_operation():
             query = Query()
             serialized_updates = self._serialize_for_db(updates)
@@ -254,24 +246,25 @@ class DatabaseManager:
                 serialized_updates["last_updated"] = datetime.now().isoformat()
 
             self.subscriptions_table.update(
-                serialized_updates, query.id == str(subscription_id)
+                serialized_updates,
+                query.id == str(subscription_id),
             )
             return self.get_subscription(subscription_id)
 
     def delete_subscription(self, subscription_id: UUID) -> bool:
-        """Delete a subscription"""
+        """Delete a subscription."""
         with self._db_operation():
             query = Query()
             result = self.subscriptions_table.remove(query.id == str(subscription_id))
             return len(result) > 0
 
     def update_subscription_servers(
-        self, subscription_id: UUID, servers: List[ServerModel]
-    ) -> Optional[SubscriptionModel]:
-        """Update servers for a subscription"""
-        serialized_servers = [
-            self._serialize_for_db(server.model_dump()) for server in servers
-        ]
+        self,
+        subscription_id: UUID,
+        servers: list[ServerModel],
+    ) -> SubscriptionModel | None:
+        """Update servers for a subscription."""
+        serialized_servers = [self._serialize_for_db(server.model_dump()) for server in servers]
         updates = {
             "servers": serialized_servers,
             "last_updated": datetime.now().isoformat(),
@@ -279,12 +272,13 @@ class DatabaseManager:
         return self.update_subscription(subscription_id, updates)
 
     def update_subscription_with_user_info(
-        self, subscription_id: UUID, servers: List[ServerModel], user_info
-    ) -> Optional[SubscriptionModel]:
-        """Update servers and user info for a subscription"""
-        serialized_servers = [
-            self._serialize_for_db(server.model_dump()) for server in servers
-        ]
+        self,
+        subscription_id: UUID,
+        servers: list[ServerModel],
+        user_info,
+    ) -> SubscriptionModel | None:
+        """Update servers and user info for a subscription."""
+        serialized_servers = [self._serialize_for_db(server.model_dump()) for server in servers]
         updates = {
             "servers": serialized_servers,
             "last_updated": datetime.now().isoformat(),
@@ -298,9 +292,11 @@ class DatabaseManager:
 
     # Server operations (within subscriptions)
     def get_server(
-        self, subscription_id: UUID, server_id: UUID
-    ) -> Optional[ServerModel]:
-        """Get a server by ID within a subscription"""
+        self,
+        subscription_id: UUID,
+        server_id: UUID,
+    ) -> ServerModel | None:
+        """Get a server by ID within a subscription."""
         subscription = self.get_subscription(subscription_id)
         if subscription:
             for server in subscription.servers:
@@ -309,9 +305,12 @@ class DatabaseManager:
         return None
 
     def update_server_status(
-        self, subscription_id: UUID, server_id: UUID, status: str
-    ) -> Optional[ServerModel]:
-        """Update server status"""
+        self,
+        subscription_id: UUID,
+        server_id: UUID,
+        status: str,
+    ) -> ServerModel | None:
+        """Update server status."""
         with self._db_operation():
             subscription = self.get_subscription(subscription_id)
             if subscription:
@@ -319,20 +318,18 @@ class DatabaseManager:
                     if server.id == server_id:
                         subscription.servers[i].status = status
                         self.update_subscription_servers(
-                            subscription_id, subscription.servers
+                            subscription_id,
+                            subscription.servers,
                         )
                         return subscription.servers[i]
             return None
 
     # Settings operations
     def get_settings(self) -> SettingsModel:
-        """Get current settings"""
+        """Get current settings."""
         with self._db_operation():
             result = self.settings_table.all()
-            if result:
-                settings = SettingsModel(**result[0])
-            else:
-                settings = SettingsModel()
+            settings = SettingsModel(**result[0]) if result else SettingsModel()
 
             if not settings.xray_binary:
                 is_available, xray_path = check_xray_command_available()
@@ -343,7 +340,7 @@ class DatabaseManager:
                     xray_data_dir = get_xray_data_directory()
                     xray_data_dir.mkdir(parents=True, exist_ok=True)
                     settings.xray_binary = str(
-                        xray_data_dir / get_default_xray_binary_filename()
+                        xray_data_dir / get_default_xray_binary_filename(),
                     )
                     settings.xray_assets_folder = str(xray_data_dir)
 
@@ -352,7 +349,7 @@ class DatabaseManager:
             return settings
 
     def update_settings(self, settings: SettingsModel) -> SettingsModel:
-        """Update settings"""
+        """Update settings."""
         with self._db_operation():
             data = settings.model_dump()
             self.settings_table.truncate()  # Clear existing settings
@@ -360,7 +357,7 @@ class DatabaseManager:
             return settings
 
     def get_appearance(self) -> AppearanceModel:
-        """Get current appearance"""
+        """Get current appearance."""
         with self._db_operation():
             result = self.appearance_table.all()
             if result:
@@ -371,13 +368,13 @@ class DatabaseManager:
             return appearance
 
     def update_appearance(self, appearance: AppearanceModel) -> AppearanceModel:
-        """Update appearance"""
+        """Update appearance."""
         with self._db_operation():
             data = appearance.model_dump()
             self.appearance_table.truncate()  # Clear existing appearance
             self.appearance_table.insert(data)
             return appearance
 
-    def close(self):
-        """Close the database connection"""
+    def close(self) -> None:
+        """Close the database connection."""
         self.db.close()

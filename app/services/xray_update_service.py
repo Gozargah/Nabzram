@@ -1,6 +1,4 @@
-"""
-Xray binary update service
-"""
+"""Xray binary update service."""
 
 import logging
 import os
@@ -9,7 +7,6 @@ from hashlib import sha256
 from pathlib import Path
 from shutil import move
 from tempfile import NamedTemporaryFile, TemporaryDirectory
-from typing import Dict, List
 from zipfile import ZipFile
 
 from requests import get as http_get
@@ -18,13 +15,11 @@ logger = logging.getLogger(__name__)
 
 
 class XrayUpdateService:
-    """Service for updating Xray binary"""
+    """Service for updating Xray binary."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.github_api_base = "https://api.github.com/repos/XTLS/Xray-core"
-        self.github_releases_base = (
-            "https://github.com/XTLS/Xray-core/releases/download"
-        )
+        self.github_releases_base = "https://github.com/XTLS/Xray-core/releases/download"
         self.timeout = 30.0
 
     def _get_system_architecture(self) -> str:
@@ -92,7 +87,7 @@ class XrayUpdateService:
         return f"Xray-{os_suffix}-{arch_suffix}.zip"
 
     def get_latest_version(self) -> str:
-        """Get the latest Xray release version"""
+        """Get the latest Xray release version."""
         try:
             response = http_get(
                 f"{self.github_api_base}/releases/latest",
@@ -111,11 +106,12 @@ class XrayUpdateService:
             return version
 
         except Exception as e:
-            logger.error(f"Failed to get latest Xray version: {e}")
-            raise RuntimeError(f"Failed to fetch latest version: {str(e)}")
+            logger.exception(f"Failed to get latest Xray version: {e}")
+            msg = f"Failed to fetch latest version: {e!s}"
+            raise RuntimeError(msg)
 
-    def get_available_versions(self, limit: int = 10) -> List[str]:
-        """Get list of available Xray versions"""
+    def get_available_versions(self, limit: int = 10) -> list[str]:
+        """Get list of available Xray versions."""
         try:
             response = http_get(
                 f"{self.github_api_base}/releases",
@@ -139,11 +135,12 @@ class XrayUpdateService:
             return versions
 
         except Exception as e:
-            logger.error(f"Failed to get Xray versions: {e}")
-            raise RuntimeError(f"Failed to fetch versions: {str(e)}")
+            logger.exception(f"Failed to get Xray versions: {e}")
+            msg = f"Failed to fetch versions: {e!s}"
+            raise RuntimeError(msg)
 
-    def get_available_versions_with_sizes(self, limit: int = 10) -> Dict[str, int]:
-        """Get available Xray versions with their download sizes"""
+    def get_available_versions_with_sizes(self, limit: int = 10) -> dict[str, int]:
+        """Get available Xray versions with their download sizes."""
         try:
             response = http_get(
                 f"{self.github_api_base}/releases",
@@ -176,11 +173,12 @@ class XrayUpdateService:
             return version_sizes
 
         except Exception as e:
-            logger.error(f"Failed to get Xray versions with sizes: {e}")
-            raise RuntimeError(f"Failed to fetch versions with sizes: {str(e)}")
+            logger.exception(f"Failed to get Xray versions with sizes: {e}")
+            msg = f"Failed to fetch versions with sizes: {e!s}"
+            raise RuntimeError(msg)
 
     def download_xray(self, version: str, target_path: str) -> bool:
-        """Download and install Xray binary"""
+        """Download and install Xray binary."""
         try:
             # Normalize version
             if not version.startswith("v"):
@@ -202,7 +200,9 @@ class XrayUpdateService:
                 # Download zip file
                 logger.info(f"Downloading from: {download_url}")
                 response = http_get(
-                    download_url, allow_redirects=True, timeout=self.timeout
+                    download_url,
+                    allow_redirects=True,
+                    timeout=self.timeout,
                 )
                 response.raise_for_status()
 
@@ -212,14 +212,16 @@ class XrayUpdateService:
                 # Download checksum file
                 logger.info(f"Downloading checksum from: {checksum_url}")
                 response = http_get(
-                    checksum_url, allow_redirects=True, timeout=self.timeout
+                    checksum_url,
+                    allow_redirects=True,
+                    timeout=self.timeout,
                 )
                 response.raise_for_status()
 
                 checksum_content = response.text
                 if "Not Found" in checksum_content:
                     logger.warning(
-                        "Checksum verification not available for this version"
+                        "Checksum verification not available for this version",
                     )
                 else:
                     with open(checksum_file, "w") as f:
@@ -235,11 +237,12 @@ class XrayUpdateService:
             return True
 
         except Exception as e:
-            logger.error(f"Failed to download Xray {version}: {e}")
-            raise RuntimeError(f"Download failed: {str(e)}")
+            logger.exception(f"Failed to download Xray {version}: {e}")
+            msg = f"Download failed: {e!s}"
+            raise RuntimeError(msg)
 
     def _verify_checksum(self, zip_file: Path, checksum_file: Path) -> None:
-        """Verify the downloaded file checksum"""
+        """Verify the downloaded file checksum."""
         try:
             # Read expected checksum
             checksum_content = checksum_file.read_text()
@@ -263,16 +266,17 @@ class XrayUpdateService:
             actual_checksum = sha256_hash.hexdigest()
 
             if expected_checksum != actual_checksum:
-                raise RuntimeError("SHA256 checksum verification failed")
+                msg = "SHA256 checksum verification failed"
+                raise RuntimeError(msg)
 
             logger.info("Checksum verification passed")
 
         except Exception as e:
-            logger.error(f"Checksum verification failed: {e}")
+            logger.exception(f"Checksum verification failed: {e}")
             raise
 
     def _extract_and_install(self, zip_file: Path, target_path: str) -> None:
-        """Extract zip file and install xray binary"""
+        """Extract zip file and install xray binary."""
         try:
             # Create target directory if it doesn't exist
             target_dir = os.path.dirname(target_path)
@@ -299,28 +303,28 @@ class XrayUpdateService:
                         break
 
                 if not xray_found:
-                    raise RuntimeError("xray binary not found in downloaded archive")
+                    msg = "xray binary not found in downloaded archive"
+                    raise RuntimeError(msg)
             logger.info(f"Xray binary installed to: {target_path}")
 
         except Exception as e:
-            logger.error(f"Failed to extract and install: {e}")
+            logger.exception(f"Failed to extract and install: {e}")
             raise
 
 
 class GeodataUpdateService:
-    """Service for updating Xray geodata files (geoip.dat, geosite.dat)"""
+    """Service for updating Xray geodata files (geoip.dat, geosite.dat)."""
 
-    def __init__(self):
-        self.geodata_base_url = (
-            "https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download"
-        )
+    def __init__(self) -> None:
+        self.geodata_base_url = "https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download"
         self.timeout = 30.0
 
-    def update_geodata(self, assets_folder: str) -> Dict[str, bool]:
-        """Download and update geoip.dat and geosite.dat files"""
+    def update_geodata(self, assets_folder: str) -> dict[str, bool]:
+        """Download and update geoip.dat and geosite.dat files."""
         try:
             if not assets_folder:
-                raise RuntimeError("Assets folder path is required")
+                msg = "Assets folder path is required"
+                raise RuntimeError(msg)
 
             # Create assets directory if it doesn't exist
             os.makedirs(assets_folder, exist_ok=True)
@@ -353,7 +357,9 @@ class GeodataUpdateService:
                         checksum_url = f"{url}.sha256sum"
                         try:
                             checksum_response = http_get(
-                                checksum_url, allow_redirects=True, timeout=60.0
+                                checksum_url,
+                                allow_redirects=True,
+                                timeout=60.0,
                             )
                             checksum_response.raise_for_status()
 
@@ -366,7 +372,7 @@ class GeodataUpdateService:
 
                         except Exception as e:
                             logger.warning(
-                                f"Checksum verification not available for {filename}: {e}"
+                                f"Checksum verification not available for {filename}: {e}",
                             )
 
                         # Move to target location
@@ -378,17 +384,18 @@ class GeodataUpdateService:
                         logger.info(f"Successfully updated {filename}")
 
                     except Exception as e:
-                        logger.error(f"Failed to update {filename}: {e}")
+                        logger.exception(f"Failed to update {filename}: {e}")
                         results[filename] = False
 
             return results
 
         except Exception as e:
-            logger.error(f"Failed to update geodata: {e}")
-            raise RuntimeError(f"Geodata update failed: {str(e)}")
+            logger.exception(f"Failed to update geodata: {e}")
+            msg = f"Geodata update failed: {e!s}"
+            raise RuntimeError(msg)
 
     def _verify_geodata_checksum(self, file_path: Path, checksum_file: Path) -> None:
-        """Verify geodata file checksum"""
+        """Verify geodata file checksum."""
         try:
             checksum_content = checksum_file.read_text().strip()
 
@@ -404,12 +411,13 @@ class GeodataUpdateService:
             actual_checksum = sha256_hash.hexdigest()
 
             if expected_checksum != actual_checksum:
+                msg = f"SHA256 checksum verification failed for {file_path.name}"
                 raise RuntimeError(
-                    f"SHA256 checksum verification failed for {file_path.name}"
+                    msg,
                 )
 
             logger.info(f"Checksum verification passed for {file_path.name}")
 
         except Exception as e:
-            logger.error(f"Checksum verification failed for {file_path.name}: {e}")
+            logger.exception(f"Checksum verification failed for {file_path.name}: {e}")
             raise
