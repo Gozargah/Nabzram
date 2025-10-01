@@ -1,5 +1,3 @@
-
-
 import React, { useState, useEffect, useCallback } from 'react';
 import {
     Subscription,
@@ -24,7 +22,8 @@ import {
     SettingsUpdateResponse,
     AppearanceResponse,
     AppearanceUpdate,
-    AppearanceUpdateResponse
+    AppearanceUpdateResponse,
+    ServerStatus
 } from './types';
 import * as api from './services/api';
 import SubscriptionList from './components/SubscriptionList';
@@ -151,8 +150,7 @@ const App: React.FC = () => {
         const statusInterval = setInterval(fetchStatus, 5000); // Poll status every 5 seconds
         return () => clearInterval(statusInterval);
     }, [fetchData, fetchStatus]);
-
-
+    
     const onAddSubscriptionSuccess = () => {
         addToast('Subscription added successfully!', 'success');
         setIsAddModalOpen(false);
@@ -178,7 +176,7 @@ const App: React.FC = () => {
         try {
             await api.stopServer();
             addToast('Server stopped successfully.', 'success');
-            fetchStatus();
+            fetchData(); // Refetch all data to get updated proxy status
         } catch (err) {
             const message = err instanceof Error ? err.message : 'Failed to stop server.';
             addToast(message, 'error');
@@ -207,7 +205,7 @@ const App: React.FC = () => {
                     const bestServer = successfulTests[0];
                     await api.startServer(sub.id, bestServer.server_id);
                     addToast(`Connected via ${sub.name} to ${bestServer.remarks} (${bestServer.ping_ms}ms)`, 'success');
-                    fetchStatus();
+                    fetchData(); // Refetch all data
                     connected = true;
                     break;
                 }
@@ -240,6 +238,8 @@ const App: React.FC = () => {
         }
     };
     
+    const isVpnActive = currentStatus?.status === ServerStatus.RUNNING || isConnecting;
+
     const renderContent = () => {
         if (isLoading) {
             return (
@@ -271,7 +271,7 @@ const App: React.FC = () => {
                             onAdd={() => setIsAddModalOpen(true)}
                             refreshList={fetchData}
                             currentStatus={currentStatus}
-                            onConnect={fetchStatus}
+                            onConnect={fetchData} // Use fetchData to get all updated state
                         />
                     </div>
                 </main>
@@ -304,6 +304,9 @@ const App: React.FC = () => {
                     >
                         <CogIcon className="h-5 w-5" />
                     </button>
+                    
+                    <div className="border-l border-border/60 h-6"></div>
+
                     <button
                         onClick={handleMinimize}
                         className="p-2 text-muted-foreground hover:text-foreground rounded-full transition-colors"
@@ -334,6 +337,7 @@ const App: React.FC = () => {
                 <SettingsModal 
                     onClose={() => setIsSettingsModalOpen(false)} 
                     onSaveSuccess={onSettingsSaveSuccess}
+                    isVpnActive={isVpnActive}
                 />
             )}
             {isUpdateModalOpen && (

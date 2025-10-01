@@ -2,6 +2,7 @@
 Subscription management service
 """
 
+import logging
 from copy import deepcopy
 from datetime import datetime, timezone
 from json import JSONDecodeError
@@ -14,6 +15,8 @@ from requests.exceptions import HTTPError, RequestException
 
 from app.models.database import ServerModel, SubscriptionModel, SubscriptionUserInfo
 from app.models.schemas import SubscriptionCreate
+
+logger = logging.getLogger(__name__)
 
 
 class SubscriptionService:
@@ -81,8 +84,8 @@ class SubscriptionService:
 
         except (ValueError, KeyError) as e:
             # Log the error but don't fail the entire subscription fetch
-            print(
-                f"Warning: Failed to parse subscription-userinfo header '{userinfo_header}': {e}"
+            logger.warning(
+                f"Failed to parse subscription-userinfo header '{userinfo_header}': {e}"
             )
             return None
 

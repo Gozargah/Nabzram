@@ -5,7 +5,12 @@ Server operations
 from typing import Any, Dict
 
 from app.database import db
-from app.ops.utils import error_reply, to_uuid
+from app.ops.utils import (
+    clear_socks_system_proxy,
+    error_reply,
+    set_socks_system_proxy,
+    to_uuid,
+)
 from app.services.process_service import process_manager
 
 
@@ -31,6 +36,14 @@ def start_server(subscription_id: str, server_id: str) -> Dict[str, Any]:
 
     if ok:
         db.update_server_status(sid, srv_id, "running")
+
+        if settings.system_proxy:
+            ports = process_manager.get_current_server_port_info()
+            for p in ports:
+                if p["protocol"] == "socks":
+                    set_socks_system_proxy("127.0.0.1", p["port"])
+                    break
+
         return {
             "success": True,
             "message": f"Server '{server.remarks}' started successfully",
@@ -60,13 +73,19 @@ def stop_server() -> Dict[str, Any]:
                 if srv.id == current_id:
                     db.update_server_status(sub.id, srv.id, "stopped")
                     break
+
+        settings = db.get_settings()
+        if settings.system_proxy:
+            clear_socks_system_proxy()
+
         return {
             "success": True,
             "message": "Server stopped successfully",
             "server_id": str(current_id),
             "status": "stopped",
         }
-        return error_reply("Failed to stop server")
+
+    return error_reply("Failed to stop server")
 
 
 def get_server_status() -> Dict[str, Any]:

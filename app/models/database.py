@@ -10,6 +10,14 @@ from uuid import UUID, uuid4
 from pydantic import BaseModel, Field, field_serializer
 
 
+class XrayLogLevel(str, Enum):
+    DEBUG = "debug"
+    INFO = "info"
+    WARNING = "warning"
+    ERROR = "error"
+    NONE = "none"
+
+
 class ServerModel(BaseModel):
     """Server model for database storage"""
 
@@ -72,16 +80,13 @@ class SettingsModel(BaseModel):
         None, description="Path to xray assets folder"
     )
 
-    class XrayLogLevel(str, Enum):
-        DEBUG = "debug"
-        INFO = "info"
-        WARNING = "warning"
-        ERROR = "error"
-        NONE = "none"
-
     xray_log_level: Optional[XrayLogLevel] = Field(
         XrayLogLevel.WARNING,
         description="Xray log level override (debug, info, warning, error, none)",
+    )
+
+    system_proxy: Optional[bool] = Field(
+        True, description="Enable OS-level system proxy management"
     )
 
 

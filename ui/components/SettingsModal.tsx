@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import Modal from './Modal';
 import * as api from '../services/api';
 import { SettingsUpdate } from '../types';
@@ -9,6 +9,7 @@ import CustomSelect, { SelectOption } from './CustomSelect';
 interface SettingsModalProps {
     onClose: () => void;
     onSaveSuccess: () => void;
+    isVpnActive: boolean;
 }
 
 const logLevelOptions: SelectOption[] = [
@@ -44,32 +45,33 @@ const TabButton: React.FC<{
     );
 };
 
-
-const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onSaveSuccess }) => {
+const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onSaveSuccess, isVpnActive }) => {
     const { setTheme, themes, theme: currentThemeName, font, setFont } = useTheme();
-    const [settings, setSettings] = useState<SettingsUpdate>({
-        socks_port: undefined,
-        http_port: undefined,
-        xray_binary: undefined,
-        xray_assets_folder: undefined,
-        xray_log_level: undefined,
-    });
+    const [settings, setSettings] = useState<SettingsUpdate>({});
     const [isLoading, setIsLoading] = useState(true);
-    const [isSaving, setIsSaving] = useState(false);
+    const [isApplyingXray, setIsApplyingXray] = useState(false);
     const [fontInput, setFontInput] = useState(font);
     const [activeTab, setActiveTab] = useState<'general' | 'appearance'>('general');
+    const [xrayBinaryInput, setXrayBinaryInput] = useState('');
     const { addToast } = useToast();
+
+    // Ref to hold the initially loaded settings to prevent auto-saving on mount
+    const initialSettings = useRef<SettingsUpdate | null>(null);
 
     const fetchSettings = useCallback(async () => {
         try {
             const currentSettings = await api.getSettings();
-            setSettings({
+            const fetchedSettings = {
                 socks_port: currentSettings.socks_port ?? undefined,
                 http_port: currentSettings.http_port ?? undefined,
                 xray_binary: currentSettings.xray_binary ?? undefined,
                 xray_assets_folder: currentSettings.xray_assets_folder ?? undefined,
                 xray_log_level: currentSettings.xray_log_level ?? undefined,
-            });
+                system_proxy: currentSettings.system_proxy ?? false,
+            };
+            setSettings(fetchedSettings);
+            setXrayBinaryInput(currentSettings.xray_binary ?? '');
+            initialSettings.current = fetchedSettings;
         } catch (err) {
             const message = err instanceof Error ? err.message : 'Failed to load settings';
             addToast(message, 'error');
@@ -82,28 +84,64 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onSaveSuccess })
         fetchSettings();
     }, [fetchSettings]);
 
-    const handleSave = async (e: React.FormEvent) => {
-        e.preventDefault();
-        setIsSaving(true);
-        try {
-            const dataToSave: SettingsUpdate = {
-                socks_port: settings.socks_port ? Number(settings.socks_port) : null,
-                http_port: settings.http_port ? Number(settings.http_port) : null,
-                xray_binary: settings.xray_binary || null,
-                xray_assets_folder: settings.xray_assets_folder || null,
-                xray_log_level: settings.xray_log_level || null,
-            };
-            await api.updateSettings(dataToSave);
-            addToast('Settings saved successfully! Refreshing status...', 'success');
-            onSaveSuccess();
-        } catch (err) {
-            const message = err instanceof Error ? err.message : 'Failed to save settings';
-            addToast(message, 'error');
-        } finally {
-            setIsSaving(false);
+    // Auto-save for immediate changes (system proxy, log level)
+    useEffect(() => {
+        if (!initialSettings.current) return; // Don't run on initial mount
+
+        const changes: SettingsUpdate = {};
+        if (settings.system_proxy !== initialSettings.current.system_proxy) {
+            changes.system_proxy = settings.system_proxy;
         }
-    };
-    
+        if (settings.xray_log_level !== initialSettings.current.xray_log_level) {
+            changes.xray_log_level = settings.xray_log_level || null;
+        }
+
+        if (Object.keys(changes).length > 0) {
+            api.updateSettings(changes)
+                .then(() => {
+                    // Update the initial state to prevent re-saving
+                    initialSettings.current = { ...initialSettings.current, ...changes };
+                })
+                .catch(err => {
+                    const message = err instanceof Error ? err.message : 'Failed to save setting';
+                    addToast(message, 'error');
+                });
+        }
+    }, [settings.system_proxy, settings.xray_log_level, addToast]);
+
+    // Auto-save with debounce for ports and assets folder
+    useEffect(() => {
+        if (!initialSettings.current) return;
+
+        const handler = setTimeout(() => {
+            const changes: SettingsUpdate = {};
+            if (settings.socks_port !== initialSettings.current?.socks_port) {
+                changes.socks_port = settings.socks_port ? Number(settings.socks_port) : null;
+            }
+            if (settings.http_port !== initialSettings.current?.http_port) {
+                changes.http_port = settings.http_port ? Number(settings.http_port) : null;
+            }
+            if (settings.xray_assets_folder !== initialSettings.current?.xray_assets_folder) {
+                changes.xray_assets_folder = settings.xray_assets_folder || null;
+            }
+
+            if (Object.keys(changes).length > 0) {
+                api.updateSettings(changes)
+                    .then(() => {
+                        initialSettings.current = { ...initialSettings.current, ...changes };
+                    })
+                    .catch(err => {
+                        const message = err instanceof Error ? err.message : 'Failed to auto-save settings';
+                        addToast(message, 'error');
+                    });
+            }
+        }, 1000); // 1-second debounce
+
+        return () => {
+            clearTimeout(handler);
+        };
+    }, [settings.socks_port, settings.http_port, settings.xray_assets_folder, addToast]);
+
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const { name, value } = e.target;
         if (name === 'socks_port' || name === 'http_port') {
@@ -112,17 +150,30 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onSaveSuccess })
             setSettings(prev => ({...prev, [name]: value }));
         }
     };
+    
+    const handleApplyXrayBinary = async () => {
+        setIsApplyingXray(true);
+        try {
+            await api.updateSettings({ xray_binary: xrayBinaryInput.trim() || null });
+            onSaveSuccess(); // This reloads data in App.tsx
+            // Manually update settings state after successful apply
+            const newPath = xrayBinaryInput.trim() || undefined;
+            setSettings(prev => ({...prev, xray_binary: newPath}));
+            if (initialSettings.current) {
+                initialSettings.current.xray_binary = newPath;
+            }
+        } catch (err) {
+            const message = err instanceof Error ? err.message : 'Failed to apply Xray path';
+            addToast(message, 'error');
+        } finally {
+            setIsApplyingXray(false);
+        }
+    };
 
     const handleApplyFont = () => {
         const trimmedFont = fontInput.trim();
         setFont(trimmedFont);
-        if (trimmedFont) {
-            addToast(`Font set to ${trimmedFont}`, 'success');
-        } else {
-            addToast(`Font reset to default`, 'success');
-        }
     };
-
 
     return (
         <Modal title="Settings" onClose={onClose} bodyClassName="!p-0">
@@ -145,23 +196,64 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onSaveSuccess })
 
                     <div className="p-6">
                         {activeTab === 'general' && (
-                            <form onSubmit={handleSave} className="space-y-6">
+                            <div className="space-y-6">
+                                <div>
+                                    <h3 className="text-md font-semibold text-foreground mb-3">VPN Settings</h3>
+                                     <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                                        <div>
+                                            <label htmlFor="system-proxy-toggle" className="text-sm font-medium text-foreground select-none">
+                                                Enable System Proxy
+                                            </label>
+                                            <p className="text-xs text-muted-foreground/80 mt-1">Automatically configure your OS proxy when connected.</p>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            role="switch"
+                                            aria-checked={settings.system_proxy}
+                                            onClick={() => setSettings(prev => ({...prev, system_proxy: !prev.system_proxy}))}
+                                            disabled={isVpnActive}
+                                            className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-card disabled:cursor-not-allowed disabled:opacity-50 ${
+                                                settings.system_proxy ? 'bg-primary' : 'bg-input'
+                                            }`}
+                                        >
+                                            <span
+                                                aria-hidden="true"
+                                                className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                                                    settings.system_proxy ? 'translate-x-5' : 'translate-x-0'
+                                                }`}
+                                            />
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <hr className="border-border"/>
+
                                 <div>
                                     <h3 className="text-md font-semibold text-foreground mb-2">Xray Configuration</h3>
                                     <p className="text-xs text-muted-foreground/80 mb-4">
-                                        Provide absolute paths for your xray-core binary and assets. Leave blank to allow auto-detection.
+                                        Changes to ports and asset folder are auto-saved. Binary path requires explicit apply.
                                     </p>
                                     <div>
                                         <label htmlFor="xray_binary" className="block text-sm font-medium text-muted-foreground mb-1">Xray Binary Path</label>
-                                        <input
-                                            type="text"
-                                            id="xray_binary"
-                                            name="xray_binary"
-                                            value={settings.xray_binary ?? ''}
-                                            onChange={handleChange}
-                                            className="w-full bg-input border border-border rounded-md p-2 text-foreground focus:ring-2 focus:ring-ring focus:outline-none"
-                                            placeholder="e.g., /usr/local/bin/xray"
-                                        />
+                                        <div className="flex items-center space-x-2">
+                                            <input
+                                                type="text"
+                                                id="xray_binary"
+                                                name="xray_binary"
+                                                value={xrayBinaryInput}
+                                                onChange={(e) => setXrayBinaryInput(e.target.value)}
+                                                className="flex-grow bg-input border border-border rounded-md p-2 text-foreground focus:ring-2 focus:ring-ring focus:outline-none"
+                                                placeholder="e.g., /usr/local/bin/xray"
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={handleApplyXrayBinary}
+                                                disabled={isApplyingXray}
+                                                className="bg-secondary text-secondary-foreground font-bold py-2 px-4 rounded-md hover:bg-secondary/80 transition-colors disabled:opacity-50"
+                                            >
+                                                {isApplyingXray ? 'Applying...' : 'Apply'}
+                                            </button>
+                                        </div>
                                     </div>
                                     <div className="mt-4">
                                         <label htmlFor="xray_assets_folder" className="block text-sm font-medium text-muted-foreground mb-1">Xray Assets Folder</label>
@@ -190,7 +282,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onSaveSuccess })
                                 <div>
                                     <h3 className="text-md font-semibold text-foreground mb-2">Proxy Ports</h3>
                                     <p className="text-xs text-muted-foreground/80 mb-4">
-                                        Override the default SOCKS and HTTP proxy ports. Leave blank to use defaults.
+                                        Leave blank to use defaults. Changes are saved automatically after you stop typing.
                                     </p>
                                     <div>
                                         <label htmlFor="socks_port" className="block text-sm font-medium text-muted-foreground mb-1">SOCKS Port</label>
@@ -221,17 +313,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onSaveSuccess })
                                         />
                                     </div>
                                 </div>
-                                
-                                <div className="flex justify-end pt-2">
-                                    <button 
-                                        type="submit" 
-                                        disabled={isSaving}
-                                        className="bg-primary text-primary-foreground font-bold py-2 px-4 rounded-md hover:bg-primary/90 disabled:bg-primary/50 disabled:cursor-not-allowed transition-colors"
-                                    >
-                                        {isSaving ? 'Saving...' : 'Save Settings'}
-                                    </button>
-                                </div>
-                            </form>
+                            </div>
                         )}
                         {activeTab === 'appearance' && (
                              <div className="space-y-6">

@@ -2,18 +2,11 @@
 Pydantic models for API request/response schemas
 """
 
-from enum import Enum
 from typing import Optional
 
 from pydantic import BaseModel, Field, HttpUrl, field_validator, model_validator
 
-
-class XrayLogLevel(str, Enum):
-    DEBUG = "debug"
-    INFO = "info"
-    WARNING = "warning"
-    ERROR = "error"
-    NONE = "none"
+from app.models.database import XrayLogLevel
 
 
 class SubscriptionCreate(BaseModel):
@@ -35,6 +28,9 @@ class SettingsUpdate(BaseModel):
     )
     xray_log_level: Optional[XrayLogLevel] = Field(
         None, description="Xray log level override (debug, info, warning, error, none)"
+    )
+    system_proxy: Optional[bool] = Field(
+        None, description="Enable OS-level system proxy management"
     )
 
     @field_validator("socks_port")

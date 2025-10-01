@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import Modal from './Modal';
 import * as api from '../services/api';
@@ -13,6 +14,7 @@ const LogStreamModal: React.FC<LogStreamModalProps> = ({ onClose }) => {
     const [error, setError] = useState<string | null>(null);
     const logContainerRef = useRef<HTMLDivElement>(null);
     const sinceMsRef = useRef<number | null>(null);
+    const shouldStickToBottom = useRef(true);
 
     // Initial fetch
     useEffect(() => {
@@ -63,14 +65,20 @@ const LogStreamModal: React.FC<LogStreamModalProps> = ({ onClose }) => {
 
     // Auto-scroll effect
     useEffect(() => {
-        if (logContainerRef.current) {
-            // Only auto-scroll if user is near the bottom
-            const { scrollHeight, scrollTop, clientHeight } = logContainerRef.current;
-            if (scrollHeight - scrollTop <= clientHeight + 50) { // 50px threshold
-                logContainerRef.current.scrollTop = logContainerRef.current.scrollHeight;
-            }
+        const container = logContainerRef.current;
+        if (container && shouldStickToBottom.current) {
+            container.scrollTop = container.scrollHeight;
         }
     }, [logs]);
+
+    const handleScroll = () => {
+        const container = logContainerRef.current;
+        if (container) {
+            const threshold = 20; // A small buffer in pixels
+            const atBottom = container.scrollHeight - container.scrollTop - container.clientHeight <= threshold;
+            shouldStickToBottom.current = atBottom;
+        }
+    };
 
     const renderLogs = () => {
         if (isLoading) {
@@ -99,6 +107,7 @@ const LogStreamModal: React.FC<LogStreamModalProps> = ({ onClose }) => {
         <Modal title="Live Logs" onClose={onClose}>
             <div
                 ref={logContainerRef}
+                onScroll={handleScroll}
                 className="bg-background text-muted-foreground font-mono text-xs p-4 rounded-md h-96 overflow-y-auto border border-border space-y-1"
                 aria-live="polite"
                 aria-atomic="false"

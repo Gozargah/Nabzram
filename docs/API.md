@@ -47,7 +47,8 @@ Response:
   "http_port": number | null,
   "xray_binary": string | null,
   "xray_assets_folder": string | null,
-  "xray_log_level": "debug" | "info" | "warning" | "error" | "none" | null
+  "xray_log_level": "debug" | "info" | "warning" | "error" | "none" | null,
+  "system_proxy": boolean | null
 }
 ```
 
@@ -59,7 +60,8 @@ Payload:
   "http_port"?: number,
   "xray_binary"?: string,
   "xray_assets_folder"?: string,
-  "xray_log_level"?: "debug" | "info" | "warning" | "error" | "none"
+  "xray_log_level"?: "debug" | "info" | "warning" | "error" | "none",
+  "system_proxy"?: boolean
 }
 ```
 Success response:
@@ -70,7 +72,8 @@ Success response:
   "http_port": number | null,
   "xray_binary": string | null,
   "xray_assets_folder": string | null,
-  "xray_log_level": "debug" | "info" | "warning" | "error" | "none" | null
+  "xray_log_level": "debug" | "info" | "warning" | "error" | "none" | null,
+  "system_proxy": boolean | null
 }
 ```
 Error response: global error model (e.g., validation issues)
@@ -231,6 +234,40 @@ Response:
   "commit": string | null,
   "go_version": string | null,
   "arch": string | null
+}
+```
+
+2) apply_system_proxy()
+Applies system proxy using current settings (127.0.0.1 with configured HTTP/SOCKS ports).
+Success response:
+```json
+{
+  "success": true,
+  "message": "System proxy applied"
+}
+```
+Error response:
+```json
+{
+  "success": false,
+  "message": "Failed to apply system proxy: <error details>"
+}
+```
+
+3) clear_system_proxy()
+Clears system proxy settings.
+Success response:
+```json
+{
+  "success": true,
+  "message": "System proxy cleared"
+}
+```
+Error response:
+```json
+{
+  "success": false,
+  "message": "Failed to clear system proxy: <error details>"
 }
 ```
 

@@ -83,6 +83,7 @@ export interface SettingsResponse {
   xray_binary: string | null;
   xray_assets_folder: string | null;
   xray_log_level: string | null;
+  system_proxy: boolean;
 }
 
 export interface SettingsUpdate {
@@ -91,6 +92,7 @@ export interface SettingsUpdate {
   xray_binary?: string | null;
   xray_assets_folder?: string | null;
   xray_log_level?: string | null;
+  system_proxy?: boolean;
 }
 
 export interface SystemInfo {

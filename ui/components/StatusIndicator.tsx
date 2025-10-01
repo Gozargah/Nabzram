@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { ServerStatus, ServerStatusResponse, SystemInfo } from '../types';
 import { PowerIcon, ClockIcon } from './icons';
@@ -12,9 +11,17 @@ interface StatusIndicatorProps {
     onOpenUpdates: () => void;
 }
 
-const StatusIndicator: React.FC<StatusIndicatorProps> = ({ status, xrayStatus, isConnecting, onConnect, onStop, onOpenUpdates }) => {
+const StatusIndicator: React.FC<StatusIndicatorProps> = ({ 
+    status, 
+    xrayStatus, 
+    isConnecting, 
+    onConnect, 
+    onStop, 
+    onOpenUpdates,
+}) => {
     const [duration, setDuration] = useState('');
     const [isFreshlyConnected, setIsFreshlyConnected] = useState(false);
+    
     const isConnected = status?.status === ServerStatus.RUNNING;
     const prevIsConnected = useRef(isConnected);
 
@@ -118,53 +125,36 @@ const StatusIndicator: React.FC<StatusIndicatorProps> = ({ status, xrayStatus, i
                 <h2 className={`text-2xl font-bold text-foreground`}>
                     {getStatusText()}
                 </h2>
+
+                <p className="text-muted-foreground text-sm truncate max-w-full mt-1.5 h-5">
+                   {isConnected ? (status?.remarks) : (isConnecting ? '' : 'Click the power button to auto-connect')}
+                </p>
                 
-                {isConnected ? (
-                    <div className="mt-1.5 flex flex-col items-center sm:items-start gap-y-2 w-full">
-                        <p className="text-muted-foreground text-sm truncate max-w-full">
-                           {status?.remarks}
+                <div className="mt-2 flex flex-col items-center sm:items-start gap-y-1 w-full">
+                    {isConnected && duration && (
+                        <div className="flex items-center text-sm text-foreground/90 font-mono bg-muted/60 px-2 py-0.5 rounded-md">
+                            <ClockIcon className="h-4 w-4 mr-1.5" />
+                            <span>{duration}</span>
+                        </div>
+                    )}
+                    {isConnected && status?.allocated_ports && status.allocated_ports.length > 0 && (
+                        <p className="text-muted-foreground text-xs font-mono">
+                            {status.allocated_ports.map(p => `${p.protocol.toUpperCase()}: ${p.port}`).join(' | ')}
                         </p>
-                        {duration && (
-                            <div className="flex items-center text-sm text-foreground/90 font-mono bg-muted/60 px-2 py-0.5 rounded-md">
-                                <ClockIcon className="h-4 w-4 mr-1.5" />
-                                <span>{duration}</span>
-                            </div>
-                        )}
-                        {status?.allocated_ports && status.allocated_ports.length > 0 && (
-                            <p className="text-muted-foreground text-xs font-mono">
-                                {status.allocated_ports.map(p => `${p.protocol.toUpperCase()}: ${p.port}`).join(' | ')}
-                            </p>
-                        )}
-                        {xrayStatus && (
-                            <div
-                                onClick={onOpenUpdates}
-                                className="mt-1 flex items-center space-x-1.5 px-2.5 py-1 rounded-full transition-colors cursor-pointer bg-success/10 text-success hover:opacity-80"
-                            >
-                                <span className="h-2 w-2 rounded-full bg-success"></span>
-                                <span className="text-xs font-mono">
-                                    Xray {xrayStatus.version}
-                                </span>
-                            </div>
-                        )}
-                    </div>
-                ) : (
-                    <>
-                        <p className="text-muted-foreground text-sm mt-1 h-5">
-                            {isConnecting ? '' : <span>Click the power button to auto-connect</span>}
-                        </p>
-                        {xrayStatus && (
-                            <div
-                                onClick={onOpenUpdates}
-                                className="mt-3 flex items-center space-x-1.5 px-2.5 py-1 rounded-full transition-colors cursor-pointer bg-success/10 text-success hover:opacity-80"
-                            >
-                                <span className="h-2 w-2 rounded-full bg-success"></span>
-                                <span className="text-xs font-mono">
-                                    Xray {xrayStatus.version}
-                                </span>
-                            </div>
-                        )}
-                    </>
-                )}
+                    )}
+
+                    {xrayStatus && (
+                        <div
+                            onClick={onOpenUpdates}
+                            className="mt-1 flex items-center space-x-1.5 px-2.5 py-1 rounded-full transition-colors cursor-pointer bg-success/10 text-success hover:opacity-80"
+                        >
+                            <span className="h-2 w-2 rounded-full bg-success"></span>
+                            <span className="text-xs font-mono">
+                                Xray {xrayStatus.version}
+                            </span>
+                        </div>
+                    )}
+                </div>
             </div>
         </div>
     );

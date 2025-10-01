@@ -4,9 +4,11 @@ Subscription operations
 
 from typing import Any, Dict, List
 
+from pydantic import ValidationError
+
 from app.database import db
 from app.models.schemas import SubscriptionCreate, SubscriptionUpdate
-from app.ops.utils import error_reply, to_uuid
+from app.ops.utils import error_reply, to_uuid, validation_error_reply
 from app.services.subscription_service import SubscriptionService
 
 
@@ -88,8 +90,10 @@ def create_subscription(payload: Dict[str, Any]) -> Dict[str, Any]:
             "name": subscription.name,
             "server_count": len(subscription.servers),
         }
+    except ValidationError as e:
+        return validation_error_reply(e)
     except Exception as e:
-        return error_reply(str(e))
+        return error_reply(f"Invalid subscription: {str(e)}")
     finally:
         service.close()
 
