@@ -215,7 +215,7 @@ jobs:
           ls -lh "nabzram-macos-${{ matrix.arch }}.zip"
 
       # =========================
-      # Extra: Package .deb on Linux
+      # Extra: Package .deb and .pkg.tar.zst on Linux
       # =========================
       - name: Install fpm (Linux)
         if: matrix.os == 'linux'
@@ -270,6 +270,52 @@ jobs:
 
           mv *.deb "$OUTDIR/"
 
+      - name: Package .pkg.tar.zst (Linux / Arch)
+        if: matrix.os == 'linux' && matrix.arch == 'x86_64'
+        shell: bash
+        run: |
+          BIN="nabzram-linux-${{ matrix.arch }}"
+          OUTDIR="build"
+
+          VERSION="$GITHUB_REF_NAME"
+          if [[ "$VERSION" == v* ]]; then
+            VERSION="${VERSION#v}"
+          fi
+
+          mkdir -p pkgroot/usr/bin
+          mkdir -p pkgroot/usr/share/applications
+          mkdir -p pkgroot/usr/share/icons/hicolor/256x256/apps
+
+          cp "$OUTDIR/$BIN" pkgroot/usr/bin/nabzram
+          chmod 755 pkgroot/usr/bin/nabzram
+
+          cat > pkgroot/usr/share/applications/nabzram.desktop <<'EOF'
+          [Desktop Entry]
+          Name=Nabzram
+          Comment=Run the Nabzram desktop app
+          Exec=nabzram
+          Icon=nabzram
+          Terminal=false
+          Type=Application
+          Categories=Utility;
+          EOF
+
+          cp assets/icon.png pkgroot/usr/share/icons/hicolor/256x256/apps/nabzram.png
+
+          fpm -s dir -t pacman \
+            -n nabzram \
+            -v "$VERSION" \
+            --architecture ${{ matrix.arch }} \
+            --description "Nabzram desktop app" \
+            --license "GPL" \
+            --url "https://github.com/${{ github.repository }}" \
+            --maintainer "SaintShit <saintshit@proton.me>" \
+            --category "utils" \
+            -C pkgroot .
+
+          mv *.pkg.tar.zst "$OUTDIR/"
+
+
       # Upload artifacts
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -280,6 +326,7 @@ jobs:
             build/nabzram-windows-*.exe
             build/nabzram-macos-*.zip
             build/*.deb
+            build/*.pkg.tar.zst
           if-no-files-found: ignore
 
   release:
@@ -312,5 +359,6 @@ jobs:
             artifacts/**/nabzram-windows-*.exe
             artifacts/**/nabzram-macos-*.zip
             artifacts/**/*.deb
+            artifacts/**/*.pkg.tar.zst
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
