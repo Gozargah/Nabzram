@@ -1,13 +1,11 @@
-"""
-System operations
-"""
+"""System operations."""
 
-from typing import Any, Dict
+from typing import Any
 
 from app.services.process_service import process_manager
 
 
-def get_xray_status() -> Dict[str, Any]:
+def get_xray_status() -> dict[str, Any]:
     """Get Xray system status."""
     info = process_manager.check_xray_availability()
     return {

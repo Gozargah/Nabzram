@@ -1,4 +1,4 @@
-from typing import Any, Dict
+from typing import Any
 
 from pydantic import ValidationError
 
@@ -8,7 +8,7 @@ from app.models.schemas import AppearanceUpdate
 from app.ops.utils import error_reply, validation_error_reply
 
 
-def get_appearance() -> Dict[str, Any]:
+def get_appearance() -> dict[str, Any]:
     """Get current appearance."""
     a = db.get_appearance()
     return {
@@ -17,7 +17,7 @@ def get_appearance() -> Dict[str, Any]:
     }
 
 
-def update_appearance(payload: AppearanceUpdate) -> Dict[str, Any]:
+def update_appearance(payload: AppearanceUpdate) -> dict[str, Any]:
     """Update appearance."""
     try:
         update = db.update_appearance(AppearanceModel.model_validate(payload))

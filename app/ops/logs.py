@@ -1,14 +1,12 @@
-"""
-Log operations
-"""
+"""Log operations."""
 
-from typing import Any, Dict, Optional
+from typing import Any
 
 from app.ops.utils import error_reply
 from app.services.process_service import process_manager
 
 
-def get_log_snapshot(limit: int = 100) -> Dict[str, Any]:
+def get_log_snapshot(limit: int = 100) -> dict[str, Any]:
     """Get a snapshot of recent logs."""
     try:
         current_server_id = process_manager.get_current_server_id()
@@ -29,12 +27,13 @@ def get_log_snapshot(limit: int = 100) -> Dict[str, Any]:
             "logs": logs,
         }
     except Exception as e:
-        return error_reply(f"Failed to get log snapshot: {str(e)}")
+        return error_reply(f"Failed to get log snapshot: {e!s}")
 
 
 def get_log_stream_batch(
-    since_ms: Optional[int] = None, limit: int = 200
-) -> Dict[str, Any]:
+    since_ms: int | None = None,
+    limit: int = 200,
+) -> dict[str, Any]:
     """Get a batch of logs since the specified timestamp."""
     try:
         current_server_id = process_manager.get_current_server_id()
@@ -69,4 +68,4 @@ def get_log_stream_batch(
             "next_since_ms": next_since_ms,
         }
     except Exception as e:
-        return error_reply(f"Failed to get log stream batch: {str(e)}")
+        return error_reply(f"Failed to get log stream batch: {e!s}")
