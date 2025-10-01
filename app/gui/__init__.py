@@ -72,18 +72,19 @@ class GuiManager:
         tray_icon.run_detached()
         return tray_icon
 
-    def create_main_window(self, url: str) -> webview.Window:
+    def create_main_window(self, url: str, **kwargs) -> webview.Window:
         """Create the main application window."""
         return webview.create_window(
             "Nabzram",
             url,
-            width=500,
-            height=900,
-            min_size=(500, 900),
-            resizable=True,
-            frameless=True,
-            easy_drag=self.easy_drag,
-            background_color="#020817",
+            width=kwargs.pop("width", 500),
+            height=kwargs.pop("height", 900),
+            min_size=kwargs.pop("min_size", (500, 900)),
+            resizable=kwargs.pop("resizable", True),
+            frameless=kwargs.pop("frameless", True),
+            easy_drag=kwargs.pop("easy_drag", self.easy_drag),
+            background_color=kwargs.pop("background_color", "#020817"),
+            **kwargs,
         )
 
     def _register_api(self, window: webview.Window, api: Any):
@@ -95,23 +96,26 @@ class GuiManager:
         ]
         window.expose(*methods)
 
-    def start_gui(self, window: webview.Window):
+    def start_tray(self, window: webview.Window):
+        """Start the tray application."""
+        self._setup_tray(window, WindowApi(window))
+
+    def start_gui(self, window: webview.Window, **kwargs):
         """Start the GUI application."""
 
         self._register_api(window, WindowApi(window))
         self._register_api(window, OperationsApi(window))
 
-        self._setup_tray(window, WindowApi(window))
-
         webview.start(
             lambda w: w.evaluate_js("document.body.style.zoom = '1.0'"),
             window,
-            gui=self.gui_type,
-            icon=self.icon_path,
-            storage_path=self.storage_path,
-            private_mode=True,
-            http_server=True,
-            debug=DEBUG,
+            gui=kwargs.pop("gui", self.gui_type),
+            icon=kwargs.pop("icon", self.icon_path),
+            storage_path=kwargs.pop("storage_path", self.storage_path),
+            private_mode=kwargs.pop("private_mode", True),
+            http_server=kwargs.pop("http_server", True),
+            debug=kwargs.pop("debug", DEBUG),
+            **kwargs,
         )
 
 

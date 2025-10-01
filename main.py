@@ -7,4 +7,5 @@ if __name__ == "__main__":
     ui_dir = APP_ROOT / "ui/dist/index.html"
     window = gui.create_main_window(str(ui_dir))
 
+    gui.start_tray(window)
     gui.start_gui(window)
