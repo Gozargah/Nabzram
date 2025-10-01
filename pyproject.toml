@@ -1,0 +1,17 @@
+[project]
+name = "Nabzram"
+version = "25.10.0102"
+description = "A Marzban client tool for connecting to Marzban subscriptions."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+]
+
+[tool.ruff]
+line-length = 120
+indent-width = 4
+respect-gitignore = true
+
+[tool.ruff.format]
+docstring-code-format = true
+docstring-code-line-length = "dynamic"
