@@ -1,9 +1,6 @@
-"""
-Pydantic models for API request/response schemas
-"""
+"""Pydantic models for API request/response schemas"""
 
 from enum import Enum
-from typing import Optional
 
 from pydantic import BaseModel, Field, HttpUrl, field_validator, model_validator
 
@@ -22,24 +19,26 @@ class SubscriptionCreate(BaseModel):
 
 
 class SubscriptionUpdate(BaseModel):
-    name: Optional[str] = Field(None, description="New name for the subscription")
-    url: Optional[HttpUrl] = Field(None, description="Subscription URL")
+    name: str | None = Field(None, description="New name for the subscription")
+    url: HttpUrl | None = Field(None, description="Subscription URL")
 
 
 class SettingsUpdate(BaseModel):
-    socks_port: Optional[int] = Field(None, description="Global SOCKS port override")
-    http_port: Optional[int] = Field(None, description="Global HTTP port override")
-    xray_binary: Optional[str] = Field(None, description="Path to xray binary")
-    xray_assets_folder: Optional[str] = Field(
-        None, description="Path to xray assets folder"
+    socks_port: int | None = Field(None, description="Global SOCKS port override")
+    http_port: int | None = Field(None, description="Global HTTP port override")
+    xray_binary: str | None = Field(None, description="Path to xray binary")
+    xray_assets_folder: str | None = Field(
+        None,
+        description="Path to xray assets folder",
     )
-    xray_log_level: Optional[XrayLogLevel] = Field(
-        None, description="Xray log level override (debug, info, warning, error, none)"
+    xray_log_level: XrayLogLevel | None = Field(
+        None,
+        description="Xray log level override (debug, info, warning, error, none)",
     )
 
     @field_validator("socks_port")
     @classmethod
-    def validate_socks_port(cls, v: Optional[int]) -> Optional[int]:
+    def validate_socks_port(cls, v: int | None) -> int | None:
         if v is None:
             return v
         if not (1 <= v <= 65535):
@@ -48,7 +47,7 @@ class SettingsUpdate(BaseModel):
 
     @field_validator("http_port")
     @classmethod
-    def validate_http_port(cls, v: Optional[int]) -> Optional[int]:
+    def validate_http_port(cls, v: int | None) -> int | None:
         if v is None:
             return v
         if not (1 <= v <= 65535):
@@ -57,15 +56,11 @@ class SettingsUpdate(BaseModel):
 
     @model_validator(mode="after")
     def validate_port_conflict(self):
-        if (
-            self.socks_port is not None
-            and self.http_port is not None
-            and self.socks_port == self.http_port
-        ):
+        if self.socks_port is not None and self.http_port is not None and self.socks_port == self.http_port:
             raise ValueError("SOCKS and HTTP ports cannot be the same")
         return self
 
 
 class AppearanceUpdate(BaseModel):
-    theme: Optional[str] = Field(None, description="Theme")
-    font: Optional[str] = Field(None, description="Font")
+    theme: str | None = Field(None, description="Theme")
+    font: str | None = Field(None, description="Font")

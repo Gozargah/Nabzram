@@ -1,8 +1,6 @@
-"""
-Subscription operations
-"""
+"""Subscription operations"""
 
-from typing import Any, Dict, List
+from typing import Any
 
 from app.database import db
 from app.models.schemas import SubscriptionCreate, SubscriptionUpdate
@@ -10,7 +8,7 @@ from app.ops.utils import error_reply, to_uuid
 from app.services.subscription_service import SubscriptionService
 
 
-def list_subscriptions() -> List[Dict[str, Any]]:
+def list_subscriptions() -> list[dict[str, Any]]:
     """List all subscriptions."""
     subs = db.get_all_subscriptions()
     result = []
@@ -20,27 +18,23 @@ def list_subscriptions() -> List[Dict[str, Any]]:
                 "id": str(sub.id),
                 "name": sub.name,
                 "url": sub.url,
-                "last_updated": sub.last_updated.isoformat()
-                if sub.last_updated
-                else None,
+                "last_updated": sub.last_updated.isoformat() if sub.last_updated else None,
                 "server_count": len(sub.servers),
                 "user_info": (
                     {
                         "used_traffic": sub.user_info.used_traffic,
                         "total": sub.user_info.total,
-                        "expire": sub.user_info.expire.isoformat()
-                        if sub.user_info and sub.user_info.expire
-                        else None,
+                        "expire": sub.user_info.expire.isoformat() if sub.user_info and sub.user_info.expire else None,
                     }
                     if sub.user_info
                     else None
                 ),
-            }
+            },
         )
     return result
 
 
-def get_subscription(subscription_id: str) -> Dict[str, Any]:
+def get_subscription(subscription_id: str) -> dict[str, Any]:
     """Get subscription details."""
     sid = to_uuid(subscription_id)
     sub = db.get_subscription(sid)
@@ -56,28 +50,25 @@ def get_subscription(subscription_id: str) -> Dict[str, Any]:
             {
                 "used_traffic": sub.user_info.used_traffic,
                 "total": sub.user_info.total,
-                "expire": sub.user_info.expire.isoformat()
-                if sub.user_info and sub.user_info.expire
-                else None,
+                "expire": sub.user_info.expire.isoformat() if sub.user_info and sub.user_info.expire else None,
             }
             if sub.user_info
             else None
         ),
-        "servers": [
-            {"id": str(s.id), "remarks": s.remarks, "status": s.status}
-            for s in sub.servers
-        ],
+        "servers": [{"id": str(s.id), "remarks": s.remarks, "status": s.status} for s in sub.servers],
     }
 
 
-def create_subscription(payload: Dict[str, Any]) -> Dict[str, Any]:
+def create_subscription(payload: dict[str, Any]) -> dict[str, Any]:
     """Create a new subscription."""
     service = SubscriptionService()
     try:
         data = SubscriptionCreate.model_validate(payload)
         settings = db.get_settings()
         subscription = service.create_subscription(
-            data, settings.socks_port, settings.http_port
+            data,
+            settings.socks_port,
+            settings.http_port,
         )
 
         db.create_subscription(subscription)
@@ -95,8 +86,9 @@ def create_subscription(payload: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def update_subscription(
-    subscription_id: str, payload: Dict[str, Any]
-) -> Dict[str, Any]:
+    subscription_id: str,
+    payload: dict[str, Any],
+) -> dict[str, Any]:
     """Update an existing subscription."""
     sid = to_uuid(subscription_id)
     service = SubscriptionService()
@@ -105,7 +97,7 @@ def update_subscription(
         if not sub:
             return error_reply("Subscription not found")
         upd = SubscriptionUpdate.model_validate(payload)
-        update_data: Dict[str, Any] = {}
+        update_data: dict[str, Any] = {}
         if upd.name is not None:
             update_data["name"] = upd.name
         if upd.url is not None:
@@ -122,7 +114,7 @@ def update_subscription(
         service.close()
 
 
-def delete_subscription(subscription_id: str) -> Dict[str, Any]:
+def delete_subscription(subscription_id: str) -> dict[str, Any]:
     """Delete a subscription."""
     sid = to_uuid(subscription_id)
     sub = db.get_subscription(sid)
@@ -139,7 +131,7 @@ def delete_subscription(subscription_id: str) -> Dict[str, Any]:
     }
 
 
-def refresh_subscription_servers(subscription_id: str) -> Dict[str, Any]:
+def refresh_subscription_servers(subscription_id: str) -> dict[str, Any]:
     """Refresh servers for a subscription."""
     sid = to_uuid(subscription_id)
     service = SubscriptionService()
@@ -149,7 +141,9 @@ def refresh_subscription_servers(subscription_id: str) -> Dict[str, Any]:
             return error_reply("Subscription not found")
         settings = db.get_settings()
         updated = service.update_subscription_servers(
-            sub, settings.socks_port, settings.http_port
+            sub,
+            settings.socks_port,
+            settings.http_port,
         )
 
         db.update_subscription_with_user_info(sid, updated.servers, updated.user_info)
@@ -158,9 +152,7 @@ def refresh_subscription_servers(subscription_id: str) -> Dict[str, Any]:
             "message": f"Subscription '{sub.name}' updated successfully",
             "id": str(sid),
             "server_count": len(updated.servers),
-            "last_updated": updated.last_updated.isoformat()
-            if updated.last_updated
-            else None,
+            "last_updated": updated.last_updated.isoformat() if updated.last_updated else None,
         }
     finally:
         service.close()

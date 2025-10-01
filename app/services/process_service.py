@@ -1,6 +1,4 @@
-"""
-Xray-core process management service
-"""
+"""Xray-core process management service"""
 
 import json
 import logging
@@ -9,13 +7,13 @@ import platform
 import subprocess
 import threading
 import time
+from collections.abc import Generator
 from copy import deepcopy
 from datetime import datetime
 from queue import Empty, Queue
 from random import randint
 from shutil import which
 from socket import AF_INET, SOCK_STREAM, socket
-from typing import Dict, Generator, List, Optional, Tuple
 from uuid import UUID
 
 from requests import get as http_get
@@ -33,7 +31,7 @@ class UUIDEncoder(json.JSONEncoder):
     def default(self, obj):
         if isinstance(obj, UUID):
             return str(obj)
-        elif isinstance(obj, datetime):
+        if isinstance(obj, datetime):
             return obj.isoformat()
         return super().default(obj)
 
@@ -42,13 +40,11 @@ class ProcessManager:
     """Manages xray-core processes"""
 
     def __init__(self):
-        self.running_processes: Dict[UUID, ProcessInfo] = {}
-        self.process_handles: Dict[UUID, subprocess.Popen] = {}
-        self.log_queues: Dict[UUID, Queue] = {}
-        self.log_threads: Dict[UUID, threading.Thread] = {}
-        self.current_server_id: Optional[UUID] = (
-            None  # Track the currently running server
-        )
+        self.running_processes: dict[UUID, ProcessInfo] = {}
+        self.process_handles: dict[UUID, subprocess.Popen] = {}
+        self.log_queues: dict[UUID, Queue] = {}
+        self.log_threads: dict[UUID, threading.Thread] = {}
+        self.current_server_id: UUID | None = None  # Track the currently running server
 
     def get_effective_xray_binary(self) -> str:
         """Get the effective xray binary path from database settings or system PATH"""
@@ -66,12 +62,11 @@ class ProcessManager:
 
         if platform.system() == "Linux":
             return "/usr/bin/xray"
-        elif platform.system() == "Windows":
+        if platform.system() == "Windows":
             return "C:\\Program Files\\Xray\\xray.exe"
-        else:
-            return "/usr/bin/xray"
+        return "/usr/bin/xray"
 
-    def get_xray_assets_folder(self) -> Optional[str]:
+    def get_xray_assets_folder(self) -> str | None:
         """Get the xray assets folder from database settings"""
         try:
             db_settings = db.get_settings()
@@ -79,13 +74,13 @@ class ProcessManager:
                 return db_settings.xray_assets_folder
         except Exception as e:
             logger.warning(
-                f"Failed to get xray_assets_folder from database settings: {e}"
+                f"Failed to get xray_assets_folder from database settings: {e}",
             )
 
         # No fallback - return None if not set in database
         return None
 
-    def check_xray_availability(self) -> Dict[str, any]:
+    def check_xray_availability(self) -> dict[str, any]:
         """Check if xray-core is available and get version info"""
         try:
             # Try to run xray version command
@@ -145,24 +140,23 @@ class ProcessManager:
                     elif "go version" in line.lower():
                         # e.g. go version go1.24.1 linux/amd64
                         go_version_match = re.search(
-                            r"go version ([^\s]+)", line, re.IGNORECASE
+                            r"go version ([^\s]+)",
+                            line,
+                            re.IGNORECASE,
                         )
                         if go_version_match:
                             version_info["go_version"] = go_version_match.group(1)
                         arch_match = re.search(r"(amd64|arm64|386|arm)", line)
                         if arch_match:
                             version_info["arch"] = arch_match.group(1)
-                    elif "/" in line and any(
-                        arch in line for arch in ["amd64", "arm64", "386", "arm"]
-                    ):
+                    elif "/" in line and any(arch in line for arch in ["amd64", "arm64", "386", "arm"]):
                         # Try to extract arch from e.g. linux/amd64
                         arch_match = re.search(r"(amd64|arm64|386|arm)", line)
                         if arch_match:
                             version_info["arch"] = arch_match.group(1)
 
                 return version_info
-            else:
-                return {"available": False, "error": stderr.decode().strip()}
+            return {"available": False, "error": stderr.decode().strip()}
 
         except FileNotFoundError:
             xray_binary = self.get_effective_xray_binary()
@@ -177,25 +171,30 @@ class ProcessManager:
         self,
         server_id: UUID,
         subscription_id: UUID,
-        config: Dict,
-        socks_port: Optional[int] = None,
-        http_port: Optional[int] = None,
-    ) -> Tuple[bool, Optional[str]]:
+        config: dict,
+        socks_port: int | None = None,
+        http_port: int | None = None,
+    ) -> tuple[bool, str | None]:
         """Start a single server (stops any currently running server first)
 
         Returns:
             Tuple[bool, Optional[str]]: (success, error_message)
+
         """
         # Stop any currently running server first
         if self.current_server_id and self.is_server_running(self.current_server_id):
             logger.info(
-                f"Stopping current server {self.current_server_id} before starting new one"
+                f"Stopping current server {self.current_server_id} before starting new one",
             )
             self.stop_server(self.current_server_id)
 
         # Start the new server with port overrides
         success, error_msg = self.start_server(
-            server_id, subscription_id, config, socks_port, http_port
+            server_id,
+            subscription_id,
+            config,
+            socks_port,
+            http_port,
         )
         if success:
             self.current_server_id = server_id
@@ -203,8 +202,11 @@ class ProcessManager:
         return success, error_msg
 
     def _apply_port_overrides(
-        self, config: Dict, socks_port: Optional[int], http_port: Optional[int]
-    ) -> Dict:
+        self,
+        config: dict,
+        socks_port: int | None,
+        http_port: int | None,
+    ) -> dict:
         """Apply global port overrides to inbound configurations at runtime"""
         if not config.get("inbounds") or (not socks_port and not http_port):
             return config
@@ -224,7 +226,7 @@ class ProcessManager:
 
         return modified_config
 
-    def _apply_log_level_override(self, config: Dict) -> Dict:
+    def _apply_log_level_override(self, config: dict) -> dict:
         """Apply global log level override to xray configuration"""
         try:
             db_settings = db.get_settings()
@@ -240,7 +242,7 @@ class ProcessManager:
                 modified_config["log"]["loglevel"] = db_settings.xray_log_level
 
                 logger.info(
-                    f"Overriding xray log level: {original_level} -> {db_settings.xray_log_level}"
+                    f"Overriding xray log level: {original_level} -> {db_settings.xray_log_level}",
                 )
                 return modified_config
         except Exception as e:
@@ -252,14 +254,15 @@ class ProcessManager:
         self,
         server_id: UUID,
         subscription_id: UUID,
-        config: Dict,
-        socks_port: Optional[int] = None,
-        http_port: Optional[int] = None,
-    ) -> Tuple[bool, Optional[str]]:
+        config: dict,
+        socks_port: int | None = None,
+        http_port: int | None = None,
+    ) -> tuple[bool, str | None]:
         """Start a server with the given configuration and optional port overrides
 
         Returns:
             Tuple[bool, Optional[str]]: (success, error_message)
+
         """
         if server_id in self.running_processes:
             logger.warning(f"Server {server_id} is already running")
@@ -275,7 +278,7 @@ class ProcessManager:
             # Convert config to JSON string with UUID support
             config_json = json.dumps(runtime_config, indent=2, cls=UUIDEncoder)
             logger.debug(
-                f"Starting server {server_id} with config size: {len(config_json)} bytes"
+                f"Starting server {server_id} with config size: {len(config_json)} bytes",
             )
 
             # Get effective xray binary and assets folder
@@ -288,7 +291,7 @@ class ProcessManager:
                 env = os.environ.copy()
                 env["XRAY_LOCATION_ASSET"] = xray_assets_folder
                 logger.info(
-                    f"Setting XRAY_LOCATION_ASSET environment variable to: {xray_assets_folder}"
+                    f"Setting XRAY_LOCATION_ASSET environment variable to: {xray_assets_folder}",
                 )
 
             # Create subprocess
@@ -327,7 +330,9 @@ class ProcessManager:
 
             # Start log reading thread
             log_thread = threading.Thread(
-                target=self._read_process_logs, args=(server_id, process), daemon=True
+                target=self._read_process_logs,
+                args=(server_id, process),
+                daemon=True,
             )
             log_thread.start()
             self.log_threads[server_id] = log_thread
@@ -338,7 +343,7 @@ class ProcessManager:
             if process.poll() is not None:
                 # Process died immediately, clean up and return failure
                 logger.error(
-                    f"Server {server_id} process died immediately with return code {process.returncode}"
+                    f"Server {server_id} process died immediately with return code {process.returncode}",
                 )
 
                 # Try to read any error output
@@ -347,7 +352,8 @@ class ProcessManager:
                     remaining_output = process.stdout.read()
                     if remaining_output:
                         error_msg = remaining_output.decode(
-                            "utf-8", errors="ignore"
+                            "utf-8",
+                            errors="ignore",
                         ).strip()
                         logger.error(f"Server {server_id} error output: {error_msg}")
                         error_details = f"Process exited with code {process.returncode}. Error: {error_msg}"
@@ -430,14 +436,15 @@ class ProcessManager:
         self,
         server_id: UUID,
         subscription_id: UUID,
-        config: Dict,
-        socks_port: Optional[int] = None,
-        http_port: Optional[int] = None,
-    ) -> Tuple[bool, Optional[str]]:
+        config: dict,
+        socks_port: int | None = None,
+        http_port: int | None = None,
+    ) -> tuple[bool, str | None]:
         """Restart a server with optional port overrides
 
         Returns:
             Tuple[bool, Optional[str]]: (success, error_message)
+
         """
         if server_id in self.running_processes:
             self.stop_server(server_id)
@@ -445,7 +452,11 @@ class ProcessManager:
             time.sleep(1)
 
         return self.start_server(
-            server_id, subscription_id, config, socks_port, http_port
+            server_id,
+            subscription_id,
+            config,
+            socks_port,
+            http_port,
         )
 
     def is_server_running(self, server_id: UUID) -> bool:
@@ -472,16 +483,16 @@ class ProcessManager:
 
         return True
 
-    def get_process_info(self, server_id: UUID) -> Optional[ProcessInfo]:
+    def get_process_info(self, server_id: UUID) -> ProcessInfo | None:
         """Get process information for a server"""
         return self.running_processes.get(server_id)
 
-    def get_server_ports(self, server_id: UUID) -> List[int]:
+    def get_server_ports(self, server_id: UUID) -> list[int]:
         """Get the allocated ports for a server (legacy method for backward compatibility)"""
         port_info = self.get_server_port_info(server_id)
         return [port["port"] for port in port_info]
 
-    def get_server_port_info(self, server_id: UUID) -> List[Dict[str, any]]:
+    def get_server_port_info(self, server_id: UUID) -> list[dict[str, any]]:
         """Get detailed port information including protocols for a server"""
         if server_id not in self.running_processes:
             return []
@@ -500,14 +511,13 @@ class ProcessManager:
                             "port": inbound["port"],
                             "protocol": protocol,
                             "tag": inbound.get("tag", None),
-                        }
+                        },
                     )
 
         return port_info
 
-    def _extract_protocol_from_tag(self, inbound: Dict) -> str:
+    def _extract_protocol_from_tag(self, inbound: dict) -> str:
         """Extract protocol type from configuration"""
-
         # Check inbound protocol field if available
         if "protocol" in inbound:
             return inbound["protocol"]
@@ -516,29 +526,29 @@ class ProcessManager:
         return "unknown"
 
     # Single server convenience methods
-    def get_current_server_id(self) -> Optional[UUID]:
+    def get_current_server_id(self) -> UUID | None:
         """Get the currently running server ID"""
         return self.current_server_id
 
     def is_any_server_running(self) -> bool:
         """Check if any server is currently running"""
         return self.current_server_id is not None and self.is_server_running(
-            self.current_server_id
+            self.current_server_id,
         )
 
-    def get_current_server_info(self) -> Optional[ProcessInfo]:
+    def get_current_server_info(self) -> ProcessInfo | None:
         """Get process information for the currently running server"""
         if self.current_server_id:
             return self.get_process_info(self.current_server_id)
         return None
 
-    def get_current_server_ports(self) -> List[int]:
+    def get_current_server_ports(self) -> list[int]:
         """Get ports for the currently running server"""
         if self.current_server_id:
             return self.get_server_ports(self.current_server_id)
         return []
 
-    def get_current_server_port_info(self) -> List[Dict[str, any]]:
+    def get_current_server_port_info(self) -> list[dict[str, any]]:
         """Get detailed port information for the currently running server"""
         if self.current_server_id:
             return self.get_server_port_info(self.current_server_id)
@@ -553,18 +563,23 @@ class ProcessManager:
     def restart_current_server(
         self,
         subscription_id: UUID,
-        config: Dict,
-        socks_port: Optional[int] = None,
-        http_port: Optional[int] = None,
-    ) -> Tuple[bool, Optional[str]]:
+        config: dict,
+        socks_port: int | None = None,
+        http_port: int | None = None,
+    ) -> tuple[bool, str | None]:
         """Restart the currently running server with new config and port overrides
 
         Returns:
             Tuple[bool, Optional[str]]: (success, error_message)
+
         """
         if self.current_server_id:
             return self.restart_server(
-                self.current_server_id, subscription_id, config, socks_port, http_port
+                self.current_server_id,
+                subscription_id,
+                config,
+                socks_port,
+                http_port,
             )
         return False, "No server is currently running"
 
@@ -601,7 +616,7 @@ class ProcessManager:
         finally:
             logger.debug(f"Log reading thread for server {server_id} ended")
 
-    def get_server_logs(self, server_id: UUID) -> Generator[Dict, None, None]:
+    def get_server_logs(self, server_id: UUID) -> Generator[dict]:
         """Get real-time logs for a specific server"""
         if server_id not in self.log_queues:
             return
@@ -622,7 +637,7 @@ class ProcessManager:
         except Exception as e:
             logger.error(f"Error streaming logs for server {server_id}: {e}")
 
-    def get_current_server_logs(self) -> Generator[Dict, None, None]:
+    def get_current_server_logs(self) -> Generator[dict]:
         """Get real-time logs from the currently running server"""
         if self.current_server_id:
             for log_entry in self.get_server_logs(self.current_server_id):
@@ -636,7 +651,7 @@ class ProcessManager:
                         yield log_entry
                     break
 
-    def get_log_snapshot(self, server_id: UUID, limit: int = 100) -> List[Dict]:
+    def get_log_snapshot(self, server_id: UUID, limit: int = 100) -> list[dict]:
         """Get a snapshot of recent logs from the queue"""
         if server_id not in self.log_queues:
             return []
@@ -652,7 +667,7 @@ class ProcessManager:
                     {
                         "timestamp": log_entry["timestamp"].isoformat(),
                         "message": log_entry["message"],
-                    }
+                    },
                 )
             except Empty:
                 break
@@ -660,8 +675,11 @@ class ProcessManager:
         return logs
 
     def get_logs_since(
-        self, server_id: UUID, since_ms: int, limit: int = 200
-    ) -> List[Dict]:
+        self,
+        server_id: UUID,
+        since_ms: int,
+        limit: int = 200,
+    ) -> list[dict]:
         """Get logs since a timestamp from the queue"""
         if server_id not in self.log_queues:
             return []
@@ -681,7 +699,7 @@ class ProcessManager:
                         {
                             "timestamp": log_entry["timestamp"].isoformat(),
                             "message": log_entry["message"],
-                        }
+                        },
                     )
             except Empty:
                 break
@@ -714,7 +732,7 @@ class ProcessManager:
         except OSError:
             return False
 
-    def _allocate_random_ports(self) -> Tuple[int, int]:
+    def _allocate_random_ports(self) -> tuple[int, int]:
         """Allocate random available ports for SOCKS and HTTP"""
         # Find random starting points to avoid conflicts
         socks_start = randint(10800, 20000)
@@ -733,11 +751,10 @@ class ProcessManager:
         self,
         server_id: UUID,
         subscription_id: UUID,
-        config: Dict,
+        config: dict,
         test_timeout: int = 6,
-    ) -> Tuple[bool, Optional[int], Optional[str], int, int]:
-        """
-        Test server connectivity by starting it on random ports and making HTTP request
+    ) -> tuple[bool, int | None, str | None, int, int]:
+        """Test server connectivity by starting it on random ports and making HTTP request
         Returns: (success, ping_ms, error_message, socks_port, http_port)
         """
         socks_port, http_port = self._allocate_random_ports()
@@ -751,7 +768,9 @@ class ProcessManager:
 
             # Start server with random ports
             success, error_msg = self.start_server(
-                server_id, subscription_id, runtime_config
+                server_id,
+                subscription_id,
+                runtime_config,
             )
             if not success:
                 error_detail = error_msg or "Failed to start server"
@@ -778,22 +797,21 @@ class ProcessManager:
                 if response.status_code == 204:
                     ping_ms = int((time.time() - start_time) * 1000)
                     return True, ping_ms, None, socks_port, http_port
-                else:
-                    return (
-                        False,
-                        None,
-                        f"HTTP {response.status_code}",
-                        socks_port,
-                        http_port,
-                    )
+                return (
+                    False,
+                    None,
+                    f"HTTP {response.status_code}",
+                    socks_port,
+                    http_port,
+                )
 
             except Timeout:
                 return False, None, "Connection timeout", socks_port, http_port
             except RequestException as e:
-                return False, None, f"Connection error: {str(e)}", socks_port, http_port
+                return False, None, f"Connection error: {e!s}", socks_port, http_port
 
         except Exception as e:
-            return False, None, f"Test error: {str(e)}", socks_port, http_port
+            return False, None, f"Test error: {e!s}", socks_port, http_port
         finally:
             # Always stop the test server
             try:
@@ -803,10 +821,12 @@ class ProcessManager:
                 pass
 
     def test_subscription_servers(
-        self, subscription_servers: List, subscription_id: UUID, test_timeout: int = 6
-    ) -> List[Dict]:
-        """
-        Test all servers in a subscription sequentially
+        self,
+        subscription_servers: list,
+        subscription_id: UUID,
+        test_timeout: int = 6,
+    ) -> list[dict]:
+        """Test all servers in a subscription sequentially
         Returns list of test results
         """
         results = []
@@ -814,10 +834,11 @@ class ProcessManager:
         # Test servers sequentially
         for server in subscription_servers:
             try:
-                success, ping_ms, error, socks_port, http_port = (
-                    self.test_server_connectivity(
-                        server.id, subscription_id, server.raw, test_timeout
-                    )
+                success, ping_ms, error, socks_port, http_port = self.test_server_connectivity(
+                    server.id,
+                    subscription_id,
+                    server.raw,
+                    test_timeout,
                 )
 
                 results.append(
@@ -829,7 +850,7 @@ class ProcessManager:
                         "error": error,
                         "socks_port": socks_port,
                         "http_port": http_port,
-                    }
+                    },
                 )
 
             except Exception as e:
@@ -839,10 +860,10 @@ class ProcessManager:
                         "remarks": server.remarks,
                         "success": False,
                         "ping_ms": None,
-                        "error": f"Test failed: {str(e)}",
+                        "error": f"Test failed: {e!s}",
                         "socks_port": 0,
                         "http_port": 0,
-                    }
+                    },
                 )
 
         return results

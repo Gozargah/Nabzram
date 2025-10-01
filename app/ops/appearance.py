@@ -1,11 +1,11 @@
-from typing import Any, Dict
+from typing import Any
 
 from app.database import db
 from app.models.database import AppearanceModel
 from app.models.schemas import AppearanceUpdate
 
 
-def get_appearance() -> Dict[str, Any]:
+def get_appearance() -> dict[str, Any]:
     """Get current appearance."""
     a = db.get_appearance()
     return {
@@ -14,7 +14,7 @@ def get_appearance() -> Dict[str, Any]:
     }
 
 
-def update_appearance(payload: AppearanceUpdate) -> Dict[str, Any]:
+def update_appearance(payload: AppearanceUpdate) -> dict[str, Any]:
     """Update appearance."""
     a = db.update_appearance(AppearanceModel.model_validate(payload))
     return {

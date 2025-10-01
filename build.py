@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-"""
-Nuitka build script for Nabzram
+"""Nuitka build script for Nabzram
 This script builds the Nabzram application with Nuitka compiler
 """
 
@@ -14,7 +13,7 @@ from pathlib import Path
 def run_command(cmd, cwd=None):
     """Run a command and stream the result in real time"""
     print(f"Running: {' '.join(cmd)}")
-    result = subprocess.run(cmd, cwd=cwd, text=True)
+    result = subprocess.run(cmd, check=False, cwd=cwd, text=True)
     if result.returncode != 0:
         print(f"Error: {result.returncode}")
         sys.exit(1)
@@ -69,7 +68,7 @@ def build_with_nuitka():
             [
                 "--windows-console-mode=disable",
                 "--windows-icon-from-ico=assets/icon.ico",
-            ]
+            ],
         )
     elif system == "darwin":
         # macOS: Cocoa backend (runtime), create app bundle and set ICNS icon
@@ -79,14 +78,14 @@ def build_with_nuitka():
                 "--macos-bundle-name=Nabzram",
                 "--macos-bundle-identifier=com.nabzram.app",
                 "--macos-app-icon=assets/icon.icns",
-            ]
+            ],
         )
     else:
         # Linux: GTK backend (runtime) and PNG icon
         nuitka_cmd.extend(
             [
                 "--linux-icon=assets/icon.png",
-            ]
+            ],
         )
 
     # Run Nuitka

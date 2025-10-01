@@ -1,9 +1,7 @@
-"""
-Settings operations
-"""
+"""Settings operations"""
 
 import logging
-from typing import Any, Dict
+from typing import Any
 
 from app.database import db
 from app.models.database import SettingsModel
@@ -14,7 +12,7 @@ from app.services.process_service import process_manager
 logger = logging.getLogger(__name__)
 
 
-def get_settings() -> Dict[str, Any]:
+def get_settings() -> dict[str, Any]:
     """Get current settings."""
     s = db.get_settings()
     return {
@@ -26,22 +24,22 @@ def get_settings() -> Dict[str, Any]:
     }
 
 
-def update_settings(payload: Dict[str, Any]) -> Dict[str, Any]:
+def update_settings(payload: dict[str, Any]) -> dict[str, Any]:
     """Update settings and optionally restart current server."""
     try:
         update = SettingsUpdate.model_validate(payload)
     except Exception as e:
-        return error_reply(f"Invalid settings: {str(e)}")
+        return error_reply(f"Invalid settings: {e!s}")
 
     db.update_settings(SettingsModel.model_validate(update.model_dump()))
 
     # Optionally restart current server if running with new ports
     try:
         if process_manager.current_server_id and process_manager.is_server_running(
-            process_manager.current_server_id
+            process_manager.current_server_id,
         ):
             server_info = process_manager.running_processes.get(
-                process_manager.current_server_id
+                process_manager.current_server_id,
             )
             if server_info:
                 process_manager.stop_server(process_manager.current_server_id)

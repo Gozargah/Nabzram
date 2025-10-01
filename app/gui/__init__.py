@@ -27,19 +27,17 @@ class GuiManager:
         """Get the appropriate icon path for the current platform."""
         if self.system == "windows":
             return os.path.abspath(APP_ROOT / "assets" / "icon.ico")
-        elif self.system == "darwin":
+        if self.system == "darwin":
             return os.path.abspath(APP_ROOT / "assets" / "icon.icns")
-        else:
-            return os.path.abspath(APP_ROOT / "assets" / "icon.png")
+        return os.path.abspath(APP_ROOT / "assets" / "icon.png")
 
     def _get_gui_type(self) -> str:
         """Get the appropriate GUI type for the current platform."""
         if self.system == "windows":
             return "edgechromium"
-        elif self.system == "darwin":
+        if self.system == "darwin":
             return "cocoa"
-        else:
-            return "gtk"
+        return "gtk"
 
     def _get_easy_drag(self) -> bool:
         """Get the easy drag setting for the current platform."""
@@ -88,16 +86,11 @@ class GuiManager:
 
     def _register_api(self, window: webview.Window, api: Any):
         """Register API methods with the webview window."""
-        methods = [
-            getattr(api, name)
-            for name in dir(api)
-            if not name.startswith("_") and callable(getattr(api, name))
-        ]
+        methods = [getattr(api, name) for name in dir(api) if not name.startswith("_") and callable(getattr(api, name))]
         window.expose(*methods)
 
     def start_gui(self, window: webview.Window):
         """Start the GUI application."""
-
         self._register_api(window, WindowApi(window))
         self._register_api(window, OperationsApi(window))
 

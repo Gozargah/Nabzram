@@ -1,15 +1,13 @@
-"""
-Server operations
-"""
+"""Server operations"""
 
-from typing import Any, Dict
+from typing import Any
 
 from app.database import db
 from app.ops.utils import error_reply, to_uuid
 from app.services.process_service import process_manager
 
 
-def start_server(subscription_id: str, server_id: str) -> Dict[str, Any]:
+def start_server(subscription_id: str, server_id: str) -> dict[str, Any]:
     """Start a server."""
     sid = to_uuid(subscription_id)
     srv_id = to_uuid(server_id)
@@ -26,7 +24,11 @@ def start_server(subscription_id: str, server_id: str) -> Dict[str, Any]:
         }
     settings = db.get_settings()
     ok, err = process_manager.start_single_server(
-        srv_id, sid, server.raw, settings.socks_port, settings.http_port
+        srv_id,
+        sid,
+        server.raw,
+        settings.socks_port,
+        settings.http_port,
     )
 
     if ok:
@@ -42,7 +44,7 @@ def start_server(subscription_id: str, server_id: str) -> Dict[str, Any]:
     return error_reply(err or f"Failed to start server '{server.remarks}'")
 
 
-def stop_server() -> Dict[str, Any]:
+def stop_server() -> dict[str, Any]:
     """Stop the currently running server."""
     if not process_manager.is_any_server_running():
         return {
@@ -69,7 +71,7 @@ def stop_server() -> Dict[str, Any]:
         return error_reply("Failed to stop server")
 
 
-def get_server_status() -> Dict[str, Any]:
+def get_server_status() -> dict[str, Any]:
     """Get current server status."""
     if not process_manager.is_any_server_running():
         return {
@@ -85,9 +87,7 @@ def get_server_status() -> Dict[str, Any]:
     current_id = process_manager.get_current_server_id()
     info = process_manager.get_current_server_info()
     ports = process_manager.get_current_server_port_info()
-    allocated_ports = [
-        {"port": p["port"], "protocol": p["protocol"], "tag": p["tag"]} for p in ports
-    ]
+    allocated_ports = [{"port": p["port"], "protocol": p["protocol"], "tag": p["tag"]} for p in ports]
     server_remarks = "Unknown"
     subs = db.get_all_subscriptions()
     for sub in subs:
@@ -111,7 +111,7 @@ def get_server_status() -> Dict[str, Any]:
     }
 
 
-def test_subscription_servers(subscription_id: str) -> Dict[str, Any]:
+def test_subscription_servers(subscription_id: str) -> dict[str, Any]:
     """Test all servers in a subscription."""
     sid = to_uuid(subscription_id)
     sub = db.get_subscription(sid)
@@ -131,7 +131,9 @@ def test_subscription_servers(subscription_id: str) -> Dict[str, Any]:
     if process_manager.is_any_server_running():
         process_manager.stop_current_server()
     results = process_manager.test_subscription_servers(
-        sub.servers, sid, test_timeout=5
+        sub.servers,
+        sid,
+        test_timeout=5,
     )
 
     success_cnt = sum(1 for r in results if r.get("success"))

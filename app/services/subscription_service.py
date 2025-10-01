@@ -1,11 +1,9 @@
-"""
-Subscription management service
-"""
+"""Subscription management service"""
 
 from copy import deepcopy
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from json import JSONDecodeError
-from typing import Any, Dict, List, Optional
+from typing import Any
 from urllib.parse import urljoin
 from uuid import uuid4
 
@@ -32,16 +30,15 @@ class SubscriptionService:
         url = str(url).rstrip("/")
 
         # Check if URL already ends with v2ray-json or similar
-        if not any(
-            endpoint in url.lower() for endpoint in ["/v2ray-json", "/v2ray", "/json"]
-        ):
+        if not any(endpoint in url.lower() for endpoint in ["/v2ray-json", "/v2ray", "/json"]):
             url = urljoin(url + "/", "v2ray-json")
 
         return url
 
     def _parse_subscription_userinfo(
-        self, userinfo_header: str
-    ) -> Optional[SubscriptionUserInfo]:
+        self,
+        userinfo_header: str,
+    ) -> SubscriptionUserInfo | None:
         """Parse subscription-userinfo header
 
         Format: upload=0; download=862108477783; total=0; expire=0
@@ -73,22 +70,25 @@ class SubscriptionService:
             # Convert expire: 0 means no expiry (None)
             expire = None
             if expire_raw > 0:
-                expire = datetime.fromtimestamp(expire_raw, tz=timezone.utc)
+                expire = datetime.fromtimestamp(expire_raw, tz=UTC)
 
             return SubscriptionUserInfo(
-                used_traffic=used_traffic, total=total, expire=expire
+                used_traffic=used_traffic,
+                total=total,
+                expire=expire,
             )
 
         except (ValueError, KeyError) as e:
             # Log the error but don't fail the entire subscription fetch
             print(
-                f"Warning: Failed to parse subscription-userinfo header '{userinfo_header}': {e}"
+                f"Warning: Failed to parse subscription-userinfo header '{userinfo_header}': {e}",
             )
             return None
 
     def fetch_subscription_config(
-        self, url: str
-    ) -> tuple[List[Dict[str, Any]], Optional[SubscriptionUserInfo]]:
+        self,
+        url: str,
+    ) -> tuple[list[dict[str, Any]], SubscriptionUserInfo | None]:
         """Fetch and parse subscription configuration and user info"""
         try:
             response = self.session.get(url)
@@ -121,19 +121,20 @@ class SubscriptionService:
                     configs = [config_data]
             else:
                 raise ValueError(
-                    "Invalid subscription format: unexpected data structure"
+                    "Invalid subscription format: unexpected data structure",
                 )
 
             return configs, user_info
 
-        except RequestException as e:
-            raise ValueError(f"Failed to fetch subscription: {str(e)}")
-        except HTTPError as e:
+        except HTTPError:
             raise ValueError(f"HTTP error {response.status_code}: {response.text}")
+        except RequestException as e:
+            raise ValueError(f"Failed to fetch subscription: {e!s}")
 
     def _extract_server_info(
-        self, config: Dict[str, Any]
-    ) -> tuple[str, Dict[str, Any]]:
+        self,
+        config: dict[str, Any],
+    ) -> tuple[str, dict[str, Any]]:
         """Extract server remarks and clean config"""
         # Try to find remarks in various possible locations
         remarks = "Unknown Server"
@@ -156,10 +157,10 @@ class SubscriptionService:
 
     def _apply_port_overrides(
         self,
-        config: Dict[str, Any],
-        socks_port: Optional[int],
-        http_port: Optional[int],
-    ) -> Dict[str, Any]:
+        config: dict[str, Any],
+        socks_port: int | None,
+        http_port: int | None,
+    ) -> dict[str, Any]:
         """Apply global port overrides to inbound configurations"""
         if not config.get("inbounds"):
             return config
@@ -179,8 +180,8 @@ class SubscriptionService:
     def create_subscription(
         self,
         subscription_data: SubscriptionCreate,
-        socks_port: Optional[int] = None,
-        http_port: Optional[int] = None,
+        socks_port: int | None = None,
+        http_port: int | None = None,
     ) -> SubscriptionModel:
         """Create a new subscription and fetch its servers"""
         # Normalize URL
@@ -197,11 +198,16 @@ class SubscriptionService:
             # Apply port overrides if specified
             if socks_port or http_port:
                 clean_config = self._apply_port_overrides(
-                    clean_config, socks_port, http_port
+                    clean_config,
+                    socks_port,
+                    http_port,
                 )
 
             server = ServerModel(
-                id=uuid4(), remarks=remarks, raw=clean_config, status="stopped"
+                id=uuid4(),
+                remarks=remarks,
+                raw=clean_config,
+                status="stopped",
             )
             servers.append(server)
 
@@ -220,8 +226,8 @@ class SubscriptionService:
     def update_subscription_servers(
         self,
         subscription: SubscriptionModel,
-        socks_port: Optional[int] = None,
-        http_port: Optional[int] = None,
+        socks_port: int | None = None,
+        http_port: int | None = None,
     ) -> SubscriptionModel:
         """Update servers for an existing subscription"""
         # Fetch fresh configuration and user info
@@ -229,9 +235,7 @@ class SubscriptionService:
 
         # Create new server models
         new_servers = []
-        existing_servers_by_remarks = {
-            server.remarks: server for server in subscription.servers
-        }
+        existing_servers_by_remarks = {server.remarks: server for server in subscription.servers}
 
         for config in configs:
             remarks, clean_config = self._extract_server_info(config)
@@ -239,7 +243,9 @@ class SubscriptionService:
             # Apply port overrides if specified
             if socks_port or http_port:
                 clean_config = self._apply_port_overrides(
-                    clean_config, socks_port, http_port
+                    clean_config,
+                    socks_port,
+                    http_port,
                 )
 
             # Try to preserve existing server ID and status if server exists
@@ -253,7 +259,10 @@ class SubscriptionService:
                 )
             else:
                 server = ServerModel(
-                    id=uuid4(), remarks=remarks, raw=clean_config, status="stopped"
+                    id=uuid4(),
+                    remarks=remarks,
+                    raw=clean_config,
+                    status="stopped",
                 )
 
             new_servers.append(server)

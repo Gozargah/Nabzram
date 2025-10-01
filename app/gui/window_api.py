@@ -1,12 +1,8 @@
-"""
-Window API - pywebview window control functions.
-"""
+"""Window API - pywebview window control functions."""
 
 
 class WindowApi:
-    """
-    API exposed to JavaScript for controlling the pywebview window.
-    """
+    """API exposed to JavaScript for controlling the pywebview window."""
 
     def __init__(self, window):
         self.window = window
