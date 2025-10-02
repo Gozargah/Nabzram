@@ -321,6 +321,17 @@ class ProcessManager:
                     outbound["streamSettings"]["sockopt"] = {}
 
                 outbound["streamSettings"]["sockopt"]["interface"] = default_interface
+
+                download_settings = (
+                    stream_settings.get("xhttpSettings", {}).get("extra", {}).get("downloadSettings", {})
+                )
+
+                if download_settings:
+                    if "sockopt" not in download_settings:
+                        download_settings["sockopt"] = {}
+                    if "interface" not in download_settings["sockopt"]:
+                        download_settings["sockopt"]["interface"] = default_interface
+
                 interface_added_count += 1
 
                 logger.debug(f"Added default interface '{default_interface}' to outbound {outbound.get('tag', '-')}")
