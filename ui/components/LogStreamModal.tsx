@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useRef } from 'react';
 import Modal from './Modal';
 import * as api from '../services/api';
@@ -97,7 +98,6 @@ const LogStreamModal: React.FC<LogStreamModalProps> = ({ onClose }) => {
 
         return logs.map((log, index) => (
              <div key={index} className="flex items-start">
-                <span className="text-primary/70 pr-3 whitespace-nowrap">{new Date(log.timestamp).toLocaleTimeString()}</span>
                 <span className="whitespace-pre-wrap break-all">{log.message}</span>
              </div>
         ));
