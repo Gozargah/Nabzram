@@ -15,7 +15,7 @@
 
 A modern GUI application for managing and connecting to **Marzban subscription servers**. Built with Python and React, wrapped in a native desktop application using pywebview.
 
-> **Important**: This app is made specifically for Marzban subscriptions. It runs Xray-core and exposes SOCKS/HTTP proxies to your system - **no TUN interface or system-wide proxy configuration** (for now).
+> **Important**: This app is made specifically for Marzban subscriptions. It runs Xray-core and exposes SOCKS/HTTP proxies to your system. **System-wide proxy configuration is now supported** - TUN interface is not yet implemented.
 
 ![Nabzram](https://img.shields.io/github/v/release/gozargah/nabzram?label=version&color=blue)
 ![Downloads](https://img.shields.io/github/downloads/gozargah/nabzram/total?label=downloads&color=green)
@@ -24,21 +24,28 @@ A modern GUI application for managing and connecting to **Marzban subscription s
 
 ## Download
 
-**Ready to use**: Download the latest release from [GitHub Releases](https://github.com/gozargah/nabzram/releases)
+**Ready to use:** Download the latest release from [GitHub Releases](https://github.com/gozargah/nabzram/releases)  
+No installation required – just run the executable for your platform!
 
-No installation required - just run the executable!
+### Direct Download Links
+
+| Platform / File | Download |
+|-----------------|----------|
+| **Linux (64-bit)** | [nabzram-linux-x86_64](https://github.com/gozargah/nabzram/releases/latest/download/nabzram-linux-x86_64) |
+| **Linux (ARM 64-bit)** | [nabzram-linux-arm64](https://github.com/gozargah/nabzram/releases/latest/download/nabzram-linux-arm64) |
+| **macOS (64-bit)** | [nabzram-macos-x86_64.zip](https://github.com/gozargah/nabzram/releases/latest/download/nabzram-macos-x86_64.zip) |
+| **macOS (ARM 64-bit)** | [nabzram-macos-arm64.zip](https://github.com/gozargah/nabzram/releases/latest/download/nabzram-macos-arm64.zip) |
+| **Windows (64-bit)** | [nabzram-windows-x86_64.exe](https://github.com/gozargah/nabzram/releases/latest/download/nabzram-windows-x86_64.exe) |
+| **Debian/Ubuntu (64-bit)** | [nabzram_25.10.0117_amd64.deb](https://github.com/gozargah/nabzram/releases/latest/download/nabzram_25.10.0117_amd64.deb) |
+| **Debian/Ubuntu (ARM 64-bit)** | [nabzram_25.10.0117_arm64.deb](https://github.com/gozargah/nabzram/releases/latest/download/nabzram_25.10.0117_arm64.deb) |
 
 ## Features
 
 - **📱 Modern UI**: Clean, responsive interface with dark theme
 - **🔧 System Tray**: Minimize to system tray with quick access
 - **🔗 Marzban Integration**: Add and connect to Marzban subscription servers
-- **🌐 Multi-Server Support**: Connect to multiple servers from different subscriptions
-- **⚡ Real-time Status**: Live connection status and server monitoring
-- **📊 Traffic Monitoring**: View usage statistics and subscription limits
-- **🔄 Auto-Updates**: Automatic Xray-core binary updates
-- **📝 Log Streaming**: Real-time connection logs and debugging
-- **🎨 Customizable Settings**: Configure Xray paths, ports, and preferences
+- **🌐 System-wide Proxy**: Automatically configure proxy to your system
+- **🎨 Customizable Settings**: Configure Xray paths, ports, and appearance preferences
 - **🖥️ Cross-Platform**: Native desktop app supporting Windows, macOS, and Linux
 
 ## Screenshots
