@@ -147,12 +147,11 @@ def test_subscription_servers(subscription_id: str) -> dict[str, Any]:
             "failed_tests": 0,
             "results": [],
         }
-    if process_manager.is_any_server_running():
-        process_manager.stop_current_server()
+
     results = process_manager.test_subscription_servers(
         sub.servers,
         sid,
-        test_timeout=5,
+        test_timeout=3,
     )
 
     success_cnt = sum(1 for r in results if r.get("success"))

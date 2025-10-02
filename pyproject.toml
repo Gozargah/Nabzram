@@ -10,6 +10,7 @@ dependencies = [
     "certifi==2025.8.3",
     "charset-normalizer==3.4.3",
     "idna==3.10",
+    "netifaces==0.11.0",
     "nuitka>=2.7.16",
     "pillow==11.3.0",
     "platformdirs==4.4.0",

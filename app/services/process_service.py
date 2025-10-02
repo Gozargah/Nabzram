@@ -8,6 +8,7 @@ import subprocess
 import threading
 import time
 from collections.abc import Generator
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from copy import deepcopy
 from datetime import datetime
 from queue import Empty, Queue
@@ -16,6 +17,7 @@ from shutil import which
 from socket import AF_INET, SOCK_STREAM, socket
 from uuid import UUID
 
+import netifaces
 from requests import get as http_get
 from requests.exceptions import RequestException, Timeout
 
@@ -78,6 +80,41 @@ class ProcessManager:
             )
 
         # No fallback - return None if not set in database
+        return None
+
+    def get_default_network_interface(self) -> str | None:
+        """Get the default network interface for the current system."""
+        try:
+            # Get the interface associated with the default gateway
+            default_gateway = netifaces.gateways().get("default", {})
+            if default_gateway:
+                for family in default_gateway.keys():
+                    gateway_info = default_gateway[family]
+                    if isinstance(gateway_info, tuple) and len(gateway_info) >= 2:
+                        interface = gateway_info[1]
+                        logger.info(f"Detected default network interface: {interface}")
+                        return interface
+
+            # Fallback: find the first non-loopback interface with an IP
+            interfaces = netifaces.interfaces()
+            for interface in interfaces:
+                if interface.startswith("lo"):
+                    continue  # Skip loopback interfaces
+
+                addr_info = netifaces.ifaddresses(interface)
+                if netifaces.AF_INET in addr_info:
+                    addrs = addr_info[netifaces.AF_INET]
+                    for addr in addrs:
+                        ip = addr.get("addr", "")
+                        if ip and not ip.startswith("127."):  # Not loopback
+                            logger.info(f"Fallback: Using network interface: {interface}")
+                            return interface
+
+        except Exception as e:
+            logger.warning(f"Failed to detect default network interface: {e}")
+            return None
+
+        logger.warning("No suitable network interface found")
         return None
 
     def check_xray_availability(self) -> dict[str, any]:
@@ -250,6 +287,55 @@ class ProcessManager:
 
         return config
 
+    def _apply_default_network_interface(self, config: dict) -> dict:
+        """Apply default network interface to outbound configurations that don't have streamSettings.sockopt.interface defined."""
+        try:
+            default_interface = self.get_default_network_interface()
+            if not default_interface:
+                logger.debug("No default network interface available, skipping interface injection")
+                return config
+
+            modified_config = deepcopy(config)
+            outbounds = modified_config.get("outbounds", [])
+
+            if not outbounds:
+                return modified_config
+
+            interface_added_count = 0
+
+            for outbound in outbounds:
+                # Skip if outbound already has sockopt.interface defined
+                stream_settings = outbound.get("streamSettings", {})
+                sockopt = stream_settings.get("sockopt", {})
+
+                if "interface" in sockopt:
+                    logger.debug(
+                        f"Outbound {outbound.get('tag', '-')} already has interface defined: {sockopt.get('interface')}"
+                    )
+                    continue
+
+                # Add default interface to this outbound
+                if "streamSettings" not in outbound:
+                    outbound["streamSettings"] = {}
+                if "sockopt" not in outbound["streamSettings"]:
+                    outbound["streamSettings"]["sockopt"] = {}
+
+                outbound["streamSettings"]["sockopt"]["interface"] = default_interface
+                interface_added_count += 1
+
+                logger.debug(f"Added default interface '{default_interface}' to outbound {outbound.get('tag', '-')}")
+
+            if interface_added_count > 0:
+                logger.info(
+                    f"Applied default network interface '{default_interface}' to {interface_added_count} outbound(s)"
+                )
+
+            return modified_config
+
+        except Exception as e:
+            logger.warning(f"Failed to apply default network interface: {e}")
+            return config
+
     def start_server(
         self,
         server_id: UUID,
@@ -274,6 +360,9 @@ class ProcessManager:
 
             # Apply log level override at runtime (not stored in database)
             runtime_config = self._apply_log_level_override(runtime_config)
+
+            # Apply default network interface to outbounds at runtime (not stored in database)
+            runtime_config = self._apply_default_network_interface(runtime_config)
 
             # Convert config to JSON string with UUID support
             config_json = json.dumps(runtime_config, indent=2, cls=UUIDEncoder)
@@ -733,6 +822,19 @@ class ProcessManager:
         except OSError:
             return False
 
+    def _wait_for_port(self, port: int, timeout: float = 5.0) -> bool:
+        """Wait until the given port is open (listening) on localhost, or timeout."""
+        start = time.time()
+        while time.time() - start < timeout:
+            try:
+                with socket(AF_INET, SOCK_STREAM) as sock:
+                    sock.settimeout(0.2)
+                    sock.connect(("127.0.0.1", port))
+                    return True
+            except Exception:
+                time.sleep(0.05)
+        return False
+
     def _allocate_random_ports(self) -> tuple[int, int]:
         """Allocate random available ports for SOCKS and HTTP."""
         # Find random starting points to avoid conflicts
@@ -761,34 +863,49 @@ class ProcessManager:
         socks_port, http_port = self._allocate_random_ports()
 
         try:
-            # Apply random port overrides to config
-            runtime_config = self._apply_port_overrides(config, socks_port, http_port)
+            if server_id == self.current_server_id:
+                ports = self.get_current_server_port_info()
+                for p in ports:
+                    if p["protocol"] == "socks":
+                        socks_port = p["port"]
+                    if p["protocol"] == "http":
+                        http_port = p["port"]
 
-            # Apply log level override to config
-            runtime_config = self._apply_log_level_override(runtime_config)
+            else:
+                # Start server with random ports
+                success, error_msg = self.start_server(
+                    server_id,
+                    subscription_id,
+                    config,
+                    socks_port,
+                    http_port,
+                )
+                if not success:
+                    error_detail = error_msg or "Failed to start server"
+                    return False, None, error_detail, socks_port, http_port
 
-            # Start server with random ports
-            success, error_msg = self.start_server(
-                server_id,
-                subscription_id,
-                runtime_config,
-            )
-            if not success:
-                error_detail = error_msg or "Failed to start server"
-                return False, None, error_detail, socks_port, http_port
+                # Wait a moment for server to fully start
+                self._wait_for_port(http_port, timeout=2.0)
 
-            # Wait a moment for server to fully start
-            time.sleep(2)
+            # First, make a "warm-up" request to let the proxy initiate its connection
+            proxies = {
+                "http": f"http://127.0.0.1:{http_port}",
+                "https": f"http://127.0.0.1:{http_port}",
+            }
+            try:
+                # Warm-up request (ignore result, just to trigger connection)
+                http_get(
+                    "http://gstatic.com/generate_204",
+                    proxies=proxies,
+                    timeout=1,
+                )
+            except Exception:
+                # Ignore any errors in warm-up
+                pass
 
-            # Test HTTP connectivity through the proxy
+            # Now measure the ping with the real test request
             start_time = time.time()
             try:
-                # Use the HTTP proxy for testing
-                proxies = {
-                    "http": f"http://127.0.0.1:{http_port}",
-                    "https": f"http://127.0.0.1:{http_port}",
-                }
-
                 response = http_get(
                     "http://gstatic.com/generate_204",
                     proxies=proxies,
@@ -816,7 +933,7 @@ class ProcessManager:
         finally:
             # Always stop the test server
             try:
-                if server_id in self.running_processes:
+                if server_id != self.current_server_id and server_id in self.running_processes:
                     self.stop_server(server_id)
             except Exception:
                 pass
@@ -827,13 +944,11 @@ class ProcessManager:
         subscription_id: UUID,
         test_timeout: int = 6,
     ) -> list[dict]:
-        """Test all servers in a subscription sequentially
+        """Test all servers in a subscription in parallel.
         Returns list of test results.
         """
-        results = []
 
-        # Test servers sequentially
-        for server in subscription_servers:
+        def test_one(server):
             try:
                 success, ping_ms, error, socks_port, http_port = self.test_server_connectivity(
                     server.id,
@@ -841,33 +956,40 @@ class ProcessManager:
                     server.raw,
                     test_timeout,
                 )
-
-                results.append(
-                    {
-                        "server_id": server.id,
-                        "remarks": server.remarks,
-                        "success": success,
-                        "ping_ms": ping_ms,
-                        "error": error,
-                        "socks_port": socks_port,
-                        "http_port": http_port,
-                    },
-                )
-
+                return {
+                    "server_id": server.id,
+                    "remarks": server.remarks,
+                    "success": success,
+                    "ping_ms": ping_ms,
+                    "error": error,
+                    "socks_port": socks_port,
+                    "http_port": http_port,
+                }
             except Exception as e:
-                results.append(
-                    {
-                        "server_id": server.id,
-                        "remarks": server.remarks,
-                        "success": False,
-                        "ping_ms": None,
-                        "error": f"Test failed: {e!s}",
-                        "socks_port": 0,
-                        "http_port": 0,
-                    },
-                )
+                return {
+                    "server_id": server.id,
+                    "remarks": server.remarks,
+                    "success": False,
+                    "ping_ms": None,
+                    "error": f"Test failed: {e!s}",
+                    "socks_port": 0,
+                    "http_port": 0,
+                }
 
-        return results
+        results = []
+        # Use ThreadPoolExecutor for parallel testing
+        with ThreadPoolExecutor(max_workers=min(8, len(subscription_servers) or 1)) as executor:
+            future_to_server = {executor.submit(test_one, server): server for server in subscription_servers}
+            for future in as_completed(future_to_server):
+                result = future.result()
+                results.append(result)
+
+        # Optionally, sort results to match input order
+        server_id_to_result = {r["server_id"]: r for r in results}
+        ordered_results = [
+            server_id_to_result.get(server.id) for server in subscription_servers if server_id_to_result.get(server.id)
+        ]
+        return ordered_results
 
 
 # Global process manager instance
