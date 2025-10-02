@@ -1,14 +1,15 @@
+import logging
 import subprocess
 
 from app.gui import GuiManager
 from settings import APP_ROOT
 
+logging.basicConfig(level=logging.DEBUG)
+
 if __name__ == "__main__":
     gui = GuiManager()
 
-    dev_server = subprocess.Popen(
-        ["bun", "run", "dev", "--port", "5173", "--host"], cwd=APP_ROOT / "ui"
-    )
+    dev_server = subprocess.Popen(["bun", "run", "dev", "--port", "5173", "--host"], cwd=APP_ROOT / "ui")
 
     def cleanup():
         if dev_server.poll() is None:
