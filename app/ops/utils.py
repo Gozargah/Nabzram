@@ -72,8 +72,9 @@ def set_socks_system_proxy(ip_address, port):
         try:
             services = subprocess.check_output(["networksetup", "-listallnetworkservices"]).decode().splitlines()
             for service in services:
-                if not service.strip() or service.startswith("*"):
+                if not service.strip() or service.startswith("*") or "*" in service:
                     continue
+
                 subprocess.run(
                     [
                         "networksetup",
@@ -210,7 +211,7 @@ def clear_socks_system_proxy():
         try:
             services = subprocess.check_output(["networksetup", "-listallnetworkservices"]).decode().splitlines()
             for service in services:
-                if not service.strip() or service.startswith("*"):
+                if not service.strip() or service.startswith("*") or "*" in service:
                     continue
                 subprocess.run(
                     ["networksetup", "-setsocksfirewallproxystate", service, "off"],
