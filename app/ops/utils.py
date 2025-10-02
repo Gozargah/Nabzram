@@ -72,7 +72,7 @@ def set_socks_system_proxy(ip_address, port):
         try:
             services = subprocess.check_output(["networksetup", "-listallnetworkservices"]).decode().splitlines()
             for service in services:
-                if not service.strip() or service.startswith("*"):
+                if not service.strip() or service.startswith("*") or service.__contains__("*"):
                     continue
                 subprocess.run(
                     [
