@@ -135,7 +135,6 @@ dependencies = [
     { name = "pydantic-core" },
     { name = "pygobject", marker = "sys_platform == 'linux'" },
     { name = "pygobject-stubs", marker = "sys_platform == 'linux'" },
-    { name = "pysocks" },
     { name = "pystray" },
     { name = "python-decouple" },
     { name = "python-xlib" },
@@ -165,7 +164,6 @@ requires-dist = [
     { name = "pydantic-core", specifier = "==2.33.2" },
     { name = "pygobject", marker = "sys_platform == 'linux'", specifier = "==3.50.0" },
     { name = "pygobject-stubs", marker = "sys_platform == 'linux'", specifier = "==2.13.0" },
-    { name = "pysocks", specifier = ">=1.7.1" },
     { name = "pystray", specifier = "==0.19.5" },
     { name = "python-decouple", specifier = "==3.8" },
     { name = "python-xlib", specifier = "==0.33" },
@@ -458,15 +456,6 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/db/c3/e790b518f84ea8dfbe32a9dcb4d8611b532de08057d19f853c1890110938/pyobjc_framework_webkit-11.1-cp313-cp313t-macosx_10_13_universal2.whl", hash = "sha256:864f9867a2caaeaeb83e5c0fa3dcf78169622233cf93a9a5eeb7012ced3b8076", size = 51985 },
     { url = "https://files.pythonhosted.org/packages/d7/4f/194e3e7c01861a5e46dfe9e1fa28ad01fd07190cb514e41a7dcf1f0b7031/pyobjc_framework_webkit-11.1-cp314-cp314-macosx_11_0_universal2.whl", hash = "sha256:13b774d4244734cb77bf3c3648149c163f62acaa105243d7c48bb3fd856b5628", size = 52248 },
     { url = "https://files.pythonhosted.org/packages/31/09/28884e7c10d3a76a76c2c8f55369dd96a90f0283800c68f5c764e1fb8e2e/pyobjc_framework_webkit-11.1-cp314-cp314t-macosx_11_0_universal2.whl", hash = "sha256:c1c00d549ab1d50e3d7e8f5f71352b999d2c32dc2365c299f317525eb9bff916", size = 52725 },
-]
-
-[[package]]
-name = "pysocks"
-version = "1.7.1"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/bd/11/293dd436aea955d45fc4e8a35b6ae7270f5b8e00b53cf6c024c83b657a11/PySocks-1.7.1.tar.gz", hash = "sha256:3f8804571ebe159c380ac6de37643bb4685970655d3bba243530d6558b799aa0", size = 284429 }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/8d/59/b4572118e098ac8e46e399a1dd0f2d85403ce8bbaad9ec79373ed6badaf9/PySocks-1.7.1-py3-none-any.whl", hash = "sha256:2725bd0a9925919b9b51739eea5f9e2bae91e83288108a9ad338b2e3a4435ee5", size = 16725 },
 ]
 
 [[package]]

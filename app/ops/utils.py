@@ -1,12 +1,13 @@
 """Common utilities for ops modules."""
 
 import logging
-import os
 import platform
+import re
 import subprocess
 from typing import Any, Dict
 from uuid import UUID
 
+import netifaces
 from pydantic import ValidationError
 
 # only for Windows
@@ -38,10 +39,60 @@ def validation_error_reply(e: ValidationError) -> Dict[str, Any]:
     return error_reply(err_msg)
 
 
+def get_default_network_service_mac_os() -> str:
+    """
+    Get the default network service for macOS by matching the default interface from netifaces.gateways()
+    with the output of 'networksetup -listnetworkserviceorder'. If no match, just return the first service in order.
+    """
+
+    # Get default interface from netifaces
+    default_gateway = netifaces.gateways().get("default", {})
+    default_iface = None
+    if default_gateway:
+        for family in default_gateway.keys():
+            gateway_info = default_gateway[family]
+            if isinstance(gateway_info, tuple) and len(gateway_info) >= 2:
+                default_iface = gateway_info[1]
+                break
+
+    # Parse networksetup -listnetworkserviceorder for mapping of service name <-> device
+    try:
+        order_output = subprocess.check_output(["networksetup", "-listnetworkserviceorder"]).decode(errors="ignore")
+    except Exception as e:
+        logging.warning(f"Failed to run networksetup -listnetworkserviceorder: {e}")
+        order_output = ""
+
+    # Build mapping: device -> service name
+    device_to_service = {}
+    service_order = []
+    current_service = None
+    for line in order_output.splitlines():
+        # Match service name line: (1) Wi-Fi
+        m = re.match(r"\(\d+\)\s+(.+)", line)
+        if m:
+            current_service = m.group(1).strip()
+            service_order.append(current_service)
+            continue
+        # Match device line: (Hardware Port: Wi-Fi, Device: en0)
+        m = re.search(r"Device:\s*([a-zA-Z0-9]+)", line)
+        if m and current_service:
+            device = m.group(1).strip()
+            device_to_service[device] = current_service
+
+    # Try to match default interface to a service
+    if default_iface and default_iface in device_to_service:
+        return device_to_service[default_iface]
+
+    # If not found, just return service_order[0] if available
+    if service_order:
+        return service_order[0]
+
+    return None
+
+
 def set_socks_system_proxy(ip_address, port):
     os_name = platform.system()
     proxy_str = f"{ip_address}:{port}"
-    protocol = "socks5"
 
     logging.info(f"Setting system SOCKS proxy on {os_name} -> {proxy_str}")
 
@@ -70,35 +121,33 @@ def set_socks_system_proxy(ip_address, port):
     # --- macOS ---
     elif os_name == "Darwin":
         try:
-            services = subprocess.check_output(["networksetup", "-listallnetworkservices"]).decode().splitlines()
-            for service in services:
-                if not service.strip() or service.startswith("*") or "*" in service:
-                    continue
+            service = get_default_network_service_mac_os()
+            if not service:
+                logging.warning("No default network service found for macOS")
+                return
 
-                subprocess.run(
-                    [
-                        "networksetup",
-                        "-setsocksfirewallproxy",
-                        service,
-                        ip_address,
-                        str(port),
-                    ],
-                    check=True,
-                )
-                subprocess.run(
-                    ["networksetup", "-setsocksfirewallproxystate", service, "on"],
-                    check=True,
-                )
+            subprocess.run(
+                [
+                    "networksetup",
+                    "-setsocksfirewallproxy",
+                    service,
+                    ip_address,
+                    str(port),
+                ],
+                check=True,
+            )
+
+            subprocess.run(
+                ["networksetup", "-setsocksfirewallproxystate", service, "on"],
+                check=True,
+            )
+
             logging.info("macOS SOCKS proxy applied.")
         except Exception as e:
             logging.error(f"Failed to set macOS proxy: {e}")
 
     # --- Linux ---
     elif os_name == "Linux":
-        proxy_url = f"{protocol}://{ip_address}:{port}"
-        os.environ["ALL_PROXY"] = proxy_url
-        os.environ["all_proxy"] = proxy_url
-
         # KDE
         if subprocess.getstatusoutput("which kwriteconfig5")[0] == 0:
             try:
@@ -174,7 +223,7 @@ def set_socks_system_proxy(ip_address, port):
             except Exception as e:
                 logging.warning(f"GSettings setup failed: {e}")
 
-        logging.warning("No GUI proxy manager found, only environment variables set.")
+        logging.warning("No GUI proxy manager found for Linux; SOCKS proxy not applied.")
 
     else:
         logging.warning(f"Unsupported OS: {os_name}")
@@ -209,23 +258,22 @@ def clear_socks_system_proxy():
     # --- macOS ---
     elif os_name == "Darwin":
         try:
-            services = subprocess.check_output(["networksetup", "-listallnetworkservices"]).decode().splitlines()
-            for service in services:
-                if not service.strip() or service.startswith("*") or "*" in service:
-                    continue
-                subprocess.run(
-                    ["networksetup", "-setsocksfirewallproxystate", service, "off"],
-                    check=True,
-                )
+            service = get_default_network_service_mac_os()
+            if not service:
+                logging.warning("No default network service found for macOS")
+                return
+
+            subprocess.run(
+                ["networksetup", "-setsocksfirewallproxystate", service, "off"],
+                check=True,
+            )
+
             logging.info("macOS proxy cleared.")
         except Exception as e:
             logging.error(f"Failed to clear macOS proxy: {e}")
 
     # --- Linux ---
     elif os_name == "Linux":
-        os.environ.pop("ALL_PROXY", None)
-        os.environ.pop("all_proxy", None)
-
         if subprocess.getstatusoutput("which kwriteconfig5")[0] == 0:
             try:
                 subprocess.run(
@@ -287,7 +335,7 @@ def clear_socks_system_proxy():
             except Exception as e:
                 logging.warning(f"GSettings clear failed: {e}")
 
-        logging.warning("No GUI proxy manager found, only environment variables cleared.")
+        logging.warning("No GUI proxy manager found for Linux; nothing to clear.")
 
     else:
         logging.warning(f"Unsupported OS: {os_name}")
