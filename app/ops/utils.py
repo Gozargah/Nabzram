@@ -41,7 +41,7 @@ def validation_error_reply(e: ValidationError) -> Dict[str, Any]:
 def set_socks_system_proxy(ip_address, port):
     os_name = platform.system()
     proxy_str = f"{ip_address}:{port}"
-    protocol = "socks"
+    protocol = "socks5"
 
     logging.info(f"Setting system SOCKS proxy on {os_name} -> {proxy_str}")
 
