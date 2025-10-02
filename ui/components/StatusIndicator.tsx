@@ -110,7 +110,7 @@ const StatusIndicator: React.FC<StatusIndicatorProps> = ({
     };
 
     return (
-        <div className="bg-card border border-border rounded-xl p-4 md:p-5 shadow-sm mb-8 flex flex-col sm:flex-row items-center justify-between space-y-4 sm:space-y-0 sm:space-x-6">
+        <div className="bg-card border border-border rounded-xl p-4 md:p-5 shadow-sm mb-8 flex flex-col sm:flex-row items-center justify-between space-y-4 sm:space-y-0 sm:space-x-6 transition-all duration-300 ease-out">
             <div className="flex-shrink-0">
                 <button
                     onClick={handleMainButtonClick}
@@ -131,22 +131,32 @@ const StatusIndicator: React.FC<StatusIndicatorProps> = ({
                 </p>
                 
                 <div className="mt-2 flex flex-col items-center sm:items-start gap-y-1 w-full">
-                    {isConnected && duration && (
+                    {/* Animated Duration */}
+                    <div
+                        className={`transition-all duration-300 ease-out overflow-hidden ${isConnected && duration ? 'max-h-8 opacity-100' : 'max-h-0 opacity-0'}`}
+                        aria-hidden={!isConnected || !duration}
+                    >
                         <div className="flex items-center text-sm text-foreground/90 font-mono bg-muted/60 px-2 py-0.5 rounded-md">
                             <ClockIcon className="h-4 w-4 mr-1.5" />
                             <span>{duration}</span>
                         </div>
-                    )}
-                    {isConnected && status?.allocated_ports && status.allocated_ports.length > 0 && (
-                        <p className="text-muted-foreground text-xs font-mono">
-                            {status.allocated_ports.map(p => `${p.protocol.toUpperCase()}: ${p.port}`).join(' | ')}
-                        </p>
-                    )}
+                    </div>
 
+                    {/* Animated Allocated Ports */}
+                    <div
+                        className={`transition-all duration-300 ease-out overflow-hidden ${isConnected && status?.allocated_ports && status.allocated_ports.length > 0 ? 'max-h-8 opacity-100' : 'max-h-0 opacity-0'}`}
+                        aria-hidden={!isConnected || !status?.allocated_ports || status.allocated_ports.length === 0}
+                    >
+                        <p className="text-muted-foreground text-xs font-mono">
+                            {status?.allocated_ports?.map(p => `${p.protocol.toUpperCase()}: ${p.port}`).join(' | ')}
+                        </p>
+                    </div>
+
+                    {/* Xray Status */}
                     {xrayStatus && (
                         <div
                             onClick={onOpenUpdates}
-                            className="mt-1 flex items-center space-x-1.5 px-2.5 py-1 rounded-full transition-colors cursor-pointer bg-success/10 text-success hover:opacity-80"
+                            className="flex items-center space-x-1.5 px-2.5 py-1 rounded-full transition-colors cursor-pointer bg-success/10 text-success hover:opacity-80"
                         >
                             <span className="h-2 w-2 rounded-full bg-success"></span>
                             <span className="text-xs font-mono">
