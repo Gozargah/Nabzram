@@ -40,3 +40,8 @@ respect-gitignore = true
 [tool.ruff.format]
 docstring-code-format = true
 docstring-code-line-length = "dynamic"
+
+[dependency-groups]
+dev = [
+    "ruff>=0.14.0",
+]

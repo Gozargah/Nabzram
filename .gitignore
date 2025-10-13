@@ -205,8 +205,9 @@ dist/
 out/
 *.tsbuildinfo
 
-# UI
+# AI
 update_from_aistudio.sh
+AGENTS.md
 
 # Android
 .buildozer
