@@ -118,6 +118,7 @@ const App: React.FC = () => {
     const { addToast } = useToast();
 
     const fetchData = useCallback(async () => {
+        setIsLoading(true);
         try {
             const [subs, status, xray] = await Promise.all([
                 api.getSubscriptions(),
@@ -130,6 +131,8 @@ const App: React.FC = () => {
         } catch (err) {
             const message = err instanceof Error ? err.message : 'An unknown error occurred.';
             addToast(`Failed to load data: ${message}`, 'error');
+        } finally {
+            setIsLoading(false);
         }
     }, [addToast]);
 
@@ -143,12 +146,7 @@ const App: React.FC = () => {
     }, []);
 
     useEffect(() => {
-        const initialLoad = async () => {
-            await fetchData();
-            setIsLoading(false);
-        };
-        initialLoad();
-
+        fetchData();
         const statusInterval = setInterval(fetchStatus, 5000); // Poll status every 5 seconds
         return () => clearInterval(statusInterval);
     }, [fetchData, fetchStatus]);

@@ -28,8 +28,41 @@ import {
     AppearanceUpdateResponse
 } from '../types';
 
+// A promise that resolves with the pywebview api object once it's available.
+// This is cached so we don't have to poll every time.
+let apiReadyPromise: Promise<any> | null = null;
+
+function ensureApiReady(timeout = 10000): Promise<any> {
+    if (apiReadyPromise) {
+        return apiReadyPromise;
+    }
+
+    apiReadyPromise = new Promise((resolve, reject) => {
+        // If it's already here, resolve immediately.
+        if ((window as any).pywebview?.api) {
+            resolve((window as any).pywebview.api);
+            return;
+        }
+
+        const startTime = Date.now();
+        const intervalId = setInterval(() => {
+            if ((window as any).pywebview?.api) {
+                clearInterval(intervalId);
+                resolve((window as any).pywebview.api);
+            } else if (Date.now() - startTime > timeout) {
+                clearInterval(intervalId);
+                apiReadyPromise = null; // Allow retrying
+                reject(new Error('pywebview API did not become available in time.'));
+            }
+        }, 100); // Poll every 100ms
+    });
+
+    return apiReadyPromise;
+}
+
+
 async function callApp<T>(method: string, ...args: any[]): Promise<T> {
-  const api = (window as any).pywebview?.api;
+  const api = await ensureApiReady();
   if (!api || typeof api[method] !== 'function') {
     throw new Error(`App API not available: ${method}`);
   }
