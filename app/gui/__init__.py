@@ -1,5 +1,6 @@
 import os
 import platform
+import tkinter as tk
 from typing import Any
 
 import pystray
@@ -21,6 +22,7 @@ class GuiManager:
         self.icon_path = self._get_icon_path()
         self.gui_type = self._get_gui_type()
         self.easy_drag = self._get_easy_drag()
+        self.dpi_scale = self._get_dpi_scale()
         self._setup_environment()
 
     def _get_icon_path(self) -> str:
@@ -48,6 +50,16 @@ class GuiManager:
         if self.system == "linux":
             os.environ["WEBKIT_DISABLE_COMPOSITING_MODE"] = "1"
 
+    def _get_dpi_scale(self) -> float:
+        """Get the DPI scaling factor for the current display."""
+        try:
+            root = tk.Tk()
+            dpi = root.winfo_fpixels("1i")  # pixels per inch
+            root.destroy()
+            return dpi / 96.0  # 96 DPI is standard
+        except Exception:
+            return 1.0  # fallback to no scaling
+
     def _setup_tray(self, window, api: WindowApi):
         """Setup system tray with left click = toggle, right click = menu."""
 
@@ -72,12 +84,16 @@ class GuiManager:
 
     def create_main_window(self, url: str, **kwargs) -> webview.Window:
         """Create the main application window."""
+        width = int(kwargs.pop("width", 500) * self.dpi_scale)
+        height = int(kwargs.pop("height", 900) * self.dpi_scale)
+        min_size = kwargs.pop("min_size", (500, 900))
+        min_size = (int(min_size[0] * self.dpi_scale), int(min_size[1] * self.dpi_scale))
         return webview.create_window(
             "Nabzram",
             url,
-            width=kwargs.pop("width", 500),
-            height=kwargs.pop("height", 900),
-            min_size=kwargs.pop("min_size", (500, 900)),
+            width=width,
+            height=height,
+            min_size=min_size,
             resizable=kwargs.pop("resizable", True),
             frameless=kwargs.pop("frameless", True),
             easy_drag=kwargs.pop("easy_drag", self.easy_drag),
@@ -99,8 +115,9 @@ class GuiManager:
         self._register_api(window, WindowApi(window))
         self._register_api(window, OperationsApi(window))
 
+        zoom_level = 1.0 / self.dpi_scale
         webview.start(
-            lambda w: w.evaluate_js("document.body.style.zoom = '1.0'"),
+            lambda w: w.evaluate_js(f"document.body.style.zoom = '{zoom_level}'"),
             window,
             gui=kwargs.pop("gui", self.gui_type),
             icon=kwargs.pop("icon", self.icon_path),
