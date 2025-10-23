@@ -131,10 +131,10 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y upx ccache || true
 
-      - name: Install UPX (Windows)
-        if: matrix.os == 'windows'
-        shell: pwsh
-        run: choco install -y upx || ver > NUL
+      # - name: Install UPX (Windows)
+      #   if: matrix.os == 'windows'
+      #   shell: pwsh
+      #   run: choco install -y upx || ver > NUL
 
       - name: Install UPX (macOS)
         if: matrix.os == 'macos'
@@ -175,7 +175,6 @@ jobs:
             assets/icon.ico=assets/icon.ico
           enable-plugins: |
             pywebview
-            upx
           windows-console-mode: disable
           windows-icon-from-ico: assets/icon.ico
           output-file: nabzram-windows-${{ matrix.arch }}
