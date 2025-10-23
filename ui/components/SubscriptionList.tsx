@@ -10,44 +10,44 @@ import { formatBytes } from './utils';
 // === Helper Functions ===
 function formatTimeRemaining(expireValue: string | null | number): string {
     if (!expireValue || expireValue === 0 || expireValue === '0') {
-      return 'Never';
+        return 'Never';
     }
-  
+
     let expireDate: Date;
     if (typeof expireValue === 'string') {
         expireDate = new Date(expireValue);
         if (isNaN(expireDate.getTime())) {
             const ts = Number(expireValue) * 1000;
             if (!isNaN(ts) && ts > 0) {
-                 expireDate = new Date(ts);
+                expireDate = new Date(ts);
             } else {
                 return 'Invalid date';
             }
         }
     } else { // is number
-         expireDate = new Date(expireValue * 1000);
+        expireDate = new Date(expireValue * 1000);
     }
-  
+
     if (isNaN(expireDate.getTime())) {
-      return 'Invalid date';
+        return 'Invalid date';
     }
-  
+
     const now = new Date();
     const diff = expireDate.getTime() - now.getTime();
-  
+
     if (diff <= 0) {
-      return 'Expired';
+        return 'Expired';
     }
-  
+
     const days = Math.floor(diff / (1000 * 60 * 60 * 24));
     if (days > 0) return `${days}d`;
-  
+
     const hours = Math.floor(diff / (1000 * 60 * 60));
     if (hours > 0) return `${hours}h`;
-  
+
     const minutes = Math.floor(diff / (1000 * 60));
     if (minutes > 0) return `${minutes}m`;
-    
+
     return '<1m';
 }
 
@@ -71,7 +71,7 @@ interface ServerItemProps {
 const ServerItem: React.FC<ServerItemProps> = ({ server, subscriptionId, isConnected, onConnect, testResult }) => {
     const [isConnecting, setIsConnecting] = useState(false);
     const { addToast } = useToast();
-    
+
     const handleConnect = async () => {
         setIsConnecting(true);
         try {
@@ -85,7 +85,7 @@ const ServerItem: React.FC<ServerItemProps> = ({ server, subscriptionId, isConne
             setIsConnecting(false);
         }
     };
-    
+
     const buttonStyle = isConnected
         ? 'bg-success text-success-foreground cursor-default'
         : 'bg-secondary text-secondary-foreground hover:bg-secondary/80';
@@ -103,12 +103,12 @@ const ServerItem: React.FC<ServerItemProps> = ({ server, subscriptionId, isConne
                     className={`flex items-center justify-center w-24 h-9 rounded-md font-semibold transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed ${buttonStyle}`}
                 >
                     {isConnecting ? (
-                         <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-foreground"></div>
+                        <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-foreground"></div>
                     ) : isConnected ? (
                         'Connected'
                     ) : (
                         <div className="flex items-center space-x-2">
-                            <ConnectIcon className="h-4 w-4"/>
+                            <ConnectIcon className="h-4 w-4" />
                             <span>Connect</span>
                         </div>
                     )}
@@ -161,13 +161,13 @@ const SubscriptionItem: React.FC<SubscriptionItemProps> = ({ subscription, refre
             fetchServers();
         }
     };
-    
+
     const handleRefresh = async (e: React.MouseEvent) => {
         e.stopPropagation();
         setIsRefreshing(true);
         try {
             await api.refreshSubscriptionServers(subscription.id);
-            addToast('Subscription refreshed successfully.', 'success');
+            addToast('Subscription updated successfully.', 'success');
             await refreshList();
             if (isExpanded) {
                 await fetchServers();
@@ -189,7 +189,6 @@ const SubscriptionItem: React.FC<SubscriptionItemProps> = ({ subscription, refre
         setIsDeleting(true);
         try {
             await api.deleteSubscription(subscription.id);
-            addToast('Subscription deleted.', 'success');
             refreshList();
         } catch (err) {
             const message = err instanceof Error ? err.message : 'Failed to delete';
@@ -197,9 +196,8 @@ const SubscriptionItem: React.FC<SubscriptionItemProps> = ({ subscription, refre
             setIsDeleting(false);
         }
     };
-    
+
     const onEditSuccess = () => {
-        addToast('Subscription updated.', 'success');
         setIsEditModalOpen(false);
         refreshList();
     };
@@ -208,7 +206,6 @@ const SubscriptionItem: React.FC<SubscriptionItemProps> = ({ subscription, refre
         e.stopPropagation();
         setIsTesting(true);
         setTestResults({});
-        addToast(`Testing servers for ${subscription.name}...`, 'info');
         try {
             const response = await api.testSubscriptionServers(subscription.id);
             const resultsMap = response.results.reduce((acc, result) => {
@@ -216,7 +213,6 @@ const SubscriptionItem: React.FC<SubscriptionItemProps> = ({ subscription, refre
                 return acc;
             }, {} as Record<string, ServerTestResult>);
             setTestResults(resultsMap);
-            addToast(`Testing complete. ${response.successful_tests}/${response.total_servers} servers responded.`, 'success');
         } catch (err) {
             const message = err instanceof Error ? err.message : 'Failed to test servers';
             addToast(message, 'error');
@@ -229,18 +225,17 @@ const SubscriptionItem: React.FC<SubscriptionItemProps> = ({ subscription, refre
         e.stopPropagation();
         setIsAutoConnecting(true);
         setTestResults({});
-        addToast('Finding the fastest server...', 'info');
-        
+
         if (!isExpanded) {
             setIsExpanded(true);
         }
         if (!servers) {
-           await fetchServers();
+            await fetchServers();
         }
 
         try {
             const response = await api.testSubscriptionServers(subscription.id);
-            
+
             const resultsMap = response.results.reduce((acc, result) => {
                 acc[result.server_id] = result;
                 return acc;
@@ -268,11 +263,11 @@ const SubscriptionItem: React.FC<SubscriptionItemProps> = ({ subscription, refre
             setIsAutoConnecting(false);
         }
     };
-    
+
     return (
         <>
             <div className="bg-card rounded-lg mb-3 overflow-hidden transition-all duration-200">
-                <div 
+                <div
                     className="p-4 flex items-center justify-between cursor-pointer hover:bg-accent/20 transition-colors"
                     onClick={handleToggleExpand}
                     aria-expanded={isExpanded}
@@ -284,7 +279,7 @@ const SubscriptionItem: React.FC<SubscriptionItemProps> = ({ subscription, refre
                                 const timeRemaining = formatTimeRemaining(subscription.user_info.expire);
                                 let text: string | null = null;
                                 let colorClass = 'text-muted-foreground bg-muted';
-                    
+
                                 if (timeRemaining === 'Expired') {
                                     text = 'Expired';
                                     colorClass = 'text-destructive-foreground bg-destructive/80 font-semibold';
@@ -319,7 +314,7 @@ const SubscriptionItem: React.FC<SubscriptionItemProps> = ({ subscription, refre
                             <LightningBoltIcon className={`h-5 w-5 ${isAutoConnecting ? 'animate-fast-pulse' : ''}`} />
                         </button>
                         <button onClick={handleTestServers} disabled={isTesting || isAutoConnecting} className="p-2 text-muted-foreground hover:text-foreground rounded-full disabled:text-muted-foreground/50 disabled:cursor-not-allowed" title="Test all servers latency">
-                           <PingIcon className="h-5 w-5" isAnimating={isTesting} />
+                            <PingIcon className="h-5 w-5" isAnimating={isTesting} />
                         </button>
                         <button onClick={handleRefresh} disabled={isRefreshing} className="p-2 text-muted-foreground hover:text-foreground rounded-full" title="Refresh subscription from URL">
                             <RefreshIcon className="h-5 w-5" spin={isRefreshing} />
@@ -338,12 +333,12 @@ const SubscriptionItem: React.FC<SubscriptionItemProps> = ({ subscription, refre
                     <div className={`px-4 pb-2 pt-4 bg-background/50 transition-all duration-200 ease-in-out transform ${isExpanded ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-2'}`}>
                         {isLoadingServers && (
                             <div className="flex justify-center items-center py-4">
-                               <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-primary"></div>
+                                <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-primary"></div>
                             </div>
                         )}
                         {serverError && <p className="text-destructive text-center py-4">{serverError}</p>}
                         {servers && servers.length > 0 && servers.map(server => (
-                             <ServerItem
+                            <ServerItem
                                 key={server.id}
                                 server={server}
                                 subscriptionId={subscription.id}
@@ -352,7 +347,7 @@ const SubscriptionItem: React.FC<SubscriptionItemProps> = ({ subscription, refre
                                 testResult={testResults[server.id] || null}
                             />
                         ))}
-                         {servers && servers.length === 0 && (
+                        {servers && servers.length === 0 && (
                             <div className="text-center text-muted-foreground py-4">
                                 <p>No servers found in this subscription.</p>
                             </div>
@@ -361,14 +356,14 @@ const SubscriptionItem: React.FC<SubscriptionItemProps> = ({ subscription, refre
                 </div>
             </div>
 
-            {isEditModalOpen && <EditSubscriptionModal 
-                onClose={() => setIsEditModalOpen(false)} 
-                onEditSuccess={onEditSuccess} 
+            {isEditModalOpen && <EditSubscriptionModal
+                onClose={() => setIsEditModalOpen(false)}
+                onEditSuccess={onEditSuccess}
                 currentName={subscription.name}
                 currentUrl={subscription.url}
                 subscriptionId={subscription.id}
             />}
-            {isDeleteModalOpen && <ConfirmDeleteModal 
+            {isDeleteModalOpen && <ConfirmDeleteModal
                 subscriptionName={subscription.name}
                 onClose={() => setIsDeleteModalOpen(false)}
                 onConfirm={handleConfirmDelete}
@@ -399,9 +394,9 @@ const SubscriptionList: React.FC<SubscriptionListProps> = ({ subscriptions, onAd
             </div>
             {subscriptions.length > 0 ? (
                 subscriptions.map(sub => (
-                    <SubscriptionItem 
-                        key={sub.id} 
-                        subscription={sub} 
+                    <SubscriptionItem
+                        key={sub.id}
+                        subscription={sub}
                         refreshList={refreshList}
                         currentStatus={currentStatus}
                         onConnect={onConnect}

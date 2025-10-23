@@ -81,7 +81,7 @@ interface PywebviewApi {
     get_xray_version_info: () => Promise<XrayVersionInfo>;
     update_xray: (payload: XrayUpdateRequest) => Promise<XrayUpdateResponse>;
     update_geodata: () => Promise<GeodataUpdateResponse>;
-    
+
     // Logs
     get_log_snapshot: (limit?: number) => Promise<any>;
     get_log_stream_batch: (since_ms?: number, limit?: number) => Promise<any>;
@@ -150,13 +150,12 @@ const App: React.FC = () => {
         const statusInterval = setInterval(fetchStatus, 5000); // Poll status every 5 seconds
         return () => clearInterval(statusInterval);
     }, [fetchData, fetchStatus]);
-    
+
     const onAddSubscriptionSuccess = () => {
-        addToast('Subscription added successfully!', 'success');
         setIsAddModalOpen(false);
         fetchData();
     };
-    
+
     const onInstallSuccess = () => {
         addToast('Xray installed successfully!', 'success');
         fetchData();
@@ -166,7 +165,7 @@ const App: React.FC = () => {
         setIsUpdateModalOpen(false);
         fetchData();
     };
-    
+
     const onSettingsSaveSuccess = () => {
         setIsSettingsModalOpen(false);
         fetchData();
@@ -175,7 +174,6 @@ const App: React.FC = () => {
     const handleStopServer = async () => {
         try {
             await api.stopServer();
-            addToast('Server stopped successfully.', 'success');
             fetchData(); // Refetch all data to get updated proxy status
         } catch (err) {
             const message = err instanceof Error ? err.message : 'Failed to stop server.';
@@ -189,12 +187,10 @@ const App: React.FC = () => {
             return;
         }
         setIsConnecting(true);
-        addToast('Finding the fastest server...', 'info');
-        
+
         let connected = false;
 
         for (const sub of subscriptions) {
-            addToast(`Testing subscription: ${sub.name}`, 'info');
             try {
                 const response = await api.testSubscriptionServers(sub.id);
                 const successfulTests = response.results
@@ -237,7 +233,7 @@ const App: React.FC = () => {
             console.warn('pywebview API not available to close window.');
         }
     };
-    
+
     const isVpnActive = currentStatus?.status === ServerStatus.RUNNING || isConnecting;
 
     const renderContent = () => {
@@ -257,15 +253,15 @@ const App: React.FC = () => {
             <div className="flex-1 overflow-y-auto">
                 <main>
                     <div className="container mx-auto max-w-lg px-4 pt-6 pb-4">
-                        <StatusIndicator 
+                        <StatusIndicator
                             status={currentStatus}
                             xrayStatus={xrayStatus}
                             isConnecting={isConnecting}
                             onConnect={handleAutoConnect}
-                            onStop={handleStopServer} 
+                            onStop={handleStopServer}
                             onOpenUpdates={() => setIsUpdateModalOpen(true)}
                         />
-                        
+
                         <SubscriptionList
                             subscriptions={subscriptions}
                             onAdd={() => setIsAddModalOpen(true)}
@@ -282,7 +278,7 @@ const App: React.FC = () => {
     return (
         <div className="bg-background text-foreground h-screen flex flex-col font-sans">
             <ToastContainer />
-            
+
             {/* Fixed, Draggable Title Bar */}
             <div className="pywebview-drag-region h-12 flex-shrink-0 flex justify-between items-center px-4 border-b border-border">
                 <div className="flex items-center space-x-3">
@@ -297,14 +293,14 @@ const App: React.FC = () => {
                     >
                         <TerminalIcon className="h-5 w-5" />
                     </button>
-                    <button 
-                        onClick={() => setIsSettingsModalOpen(true)} 
+                    <button
+                        onClick={() => setIsSettingsModalOpen(true)}
                         className="p-2 text-muted-foreground hover:text-foreground rounded-full transition-colors"
                         aria-label="Open settings"
                     >
                         <CogIcon className="h-5 w-5" />
                     </button>
-                    
+
                     <div className="border-l border-border/60 h-6"></div>
 
                     <button
@@ -323,7 +319,7 @@ const App: React.FC = () => {
                     </button>
                 </div>
             </div>
-            
+
             {renderContent()}
 
             {/* Modals */}
@@ -334,14 +330,14 @@ const App: React.FC = () => {
                 />
             )}
             {isSettingsModalOpen && (
-                <SettingsModal 
-                    onClose={() => setIsSettingsModalOpen(false)} 
+                <SettingsModal
+                    onClose={() => setIsSettingsModalOpen(false)}
                     onSaveSuccess={onSettingsSaveSuccess}
                     isVpnActive={isVpnActive}
                 />
             )}
             {isUpdateModalOpen && (
-                <UpdateModal 
+                <UpdateModal
                     onClose={() => setIsUpdateModalOpen(false)}
                     onUpdateSuccess={onUpdateSuccess}
                 />

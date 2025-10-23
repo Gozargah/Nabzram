@@ -59,8 +59,6 @@ const InstallationRequired: React.FC<InstallationRequiredProps> = ({ onInstallSu
         setIsInstalling(true);
         const versionToInstall = customVersion.trim() || (selectedVersion === 'latest' ? null : selectedVersion);
         
-        addToast(`Installing Xray ${versionToInstall || 'latest'}. This may take a moment...`, 'info');
-        
         try {
             await api.updateXray({ version: versionToInstall });
             onInstallSuccess();

@@ -62,8 +62,6 @@ const UpdateModal: React.FC<UpdateModalProps> = ({ onClose, onUpdateSuccess }) =
         setIsUpdating(true);
         const versionToInstall = customVersion.trim() || (selectedVersion === 'latest' ? null : selectedVersion);
         
-        addToast(`Updating Xray to ${versionToInstall || 'latest'}. This may take a moment...`, 'info');
-        
         try {
             const response = await api.updateXray({ version: versionToInstall });
             addToast(response.message, 'success');
@@ -78,7 +76,6 @@ const UpdateModal: React.FC<UpdateModalProps> = ({ onClose, onUpdateSuccess }) =
 
     const handleUpdateGeodata = async () => {
         setIsUpdatingGeodata(true);
-        addToast('Updating geodata files (geoip.dat, geosite.dat)...', 'info');
         try {
             const response = await api.updateGeodata();
             addToast(response.message, 'success');
