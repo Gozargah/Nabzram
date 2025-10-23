@@ -83,6 +83,8 @@ jobs:
 
       - name: Install uv
         uses: astral-sh/setup-uv@v6
+        with:
+          python-version: 3.13
 
       # Get prebuilt frontend into ui/dist
       - name: Download frontend dist
