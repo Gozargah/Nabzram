@@ -57,7 +57,7 @@ def get_subscription(subscription_id: str) -> dict[str, Any]:
             if sub.user_info
             else None
         ),
-        "servers": [{"id": str(s.id), "remarks": s.remarks, "status": s.status} for s in sub.servers],
+        "servers": [{"id": str(s.id), "remarks": s.remarks} for s in sub.servers],
     }
 
 

@@ -37,7 +37,7 @@ def start_server(subscription_id: str, server_id: str) -> dict[str, Any]:
     )
 
     if ok:
-        db.update_server_status(sid, srv_id, "running")
+        
 
         if settings.system_proxy:
             ports = process_manager.get_current_server_port_info()
@@ -53,7 +53,7 @@ def start_server(subscription_id: str, server_id: str) -> dict[str, Any]:
             "status": "running",
             "remarks": server.remarks,
         }
-    db.update_server_status(sid, srv_id, "error")
+    
     return error_reply(err or f"Failed to start server '{server.remarks}'")
 
 
@@ -73,7 +73,7 @@ def stop_server() -> dict[str, Any]:
         for sub in subs:
             for srv in sub.servers:
                 if srv.id == current_id:
-                    db.update_server_status(sub.id, srv.id, "stopped")
+                    
                     break
 
         settings = db.get_settings()
@@ -113,8 +113,7 @@ def get_server_status() -> dict[str, Any]:
         for srv in sub.servers:
             if srv.id == current_id:
                 server_remarks = srv.remarks
-                if srv.status != "running":
-                    db.update_server_status(sub.id, srv.id, "running")
+                
                 break
     return {
         "success": True,

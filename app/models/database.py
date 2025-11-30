@@ -22,7 +22,6 @@ class ServerModel(BaseModel):
     id: UUID = Field(default_factory=uuid4)
     remarks: str = Field(..., description="Server remarks from subscription")
     raw: dict[str, Any] = Field(..., description="Full JSON config")
-    status: str = Field(default="stopped", description="Server status")
 
     @field_serializer("id")
     def serialize_id(self, value: UUID) -> str:

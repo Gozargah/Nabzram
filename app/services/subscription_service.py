@@ -256,7 +256,7 @@ class SubscriptionService:
                     id=existing_server.id,
                     remarks=remarks,
                     raw=clean_config,
-                    status=existing_server.status,  # Preserve status
+                    
                 )
             else:
                 server = ServerModel(

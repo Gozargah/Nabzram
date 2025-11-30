@@ -304,25 +304,7 @@ class DatabaseManager:
                     return server
         return None
 
-    def update_server_status(
-        self,
-        subscription_id: UUID,
-        server_id: UUID,
-        status: str,
-    ) -> ServerModel | None:
-        """Update server status."""
-        with self._db_operation():
-            subscription = self.get_subscription(subscription_id)
-            if subscription:
-                for i, server in enumerate(subscription.servers):
-                    if server.id == server_id:
-                        subscription.servers[i].status = status
-                        self.update_subscription_servers(
-                            subscription_id,
-                            subscription.servers,
-                        )
-                        return subscription.servers[i]
-            return None
+    
 
     # Settings operations
     def get_settings(self) -> SettingsModel:
