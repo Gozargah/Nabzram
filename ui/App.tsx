@@ -117,8 +117,8 @@ const App: React.FC = () => {
     const [isLogModalOpen, setIsLogModalOpen] = useState(false);
     const { addToast } = useToast();
 
-    const fetchData = useCallback(async () => {
-        setIsLoading(true);
+    const fetchData = useCallback(async (showLoading = true) => {
+        if (showLoading) setIsLoading(true);
         try {
             const [subs, status, xray] = await Promise.all([
                 api.getSubscriptions(),
@@ -132,7 +132,7 @@ const App: React.FC = () => {
             const message = err instanceof Error ? err.message : 'An unknown error occurred.';
             addToast(`Failed to load data: ${message}`, 'error');
         } finally {
-            setIsLoading(false);
+            if (showLoading) setIsLoading(false);
         }
     }, [addToast]);
 
@@ -146,35 +146,35 @@ const App: React.FC = () => {
     }, []);
 
     useEffect(() => {
-        fetchData();
+        fetchData(); // Initial load shows loader
         const statusInterval = setInterval(fetchStatus, 5000); // Poll status every 5 seconds
         return () => clearInterval(statusInterval);
     }, [fetchData, fetchStatus]);
 
     const onAddSubscriptionSuccess = () => {
         setIsAddModalOpen(false);
-        fetchData();
+        fetchData(true);
     };
 
     const onInstallSuccess = () => {
         addToast('Xray installed successfully!', 'success');
-        fetchData();
+        fetchData(true);
     };
 
     const onUpdateSuccess = () => {
         setIsUpdateModalOpen(false);
-        fetchData();
+        fetchData(true);
     };
 
     const onSettingsSaveSuccess = () => {
         setIsSettingsModalOpen(false);
-        fetchData();
+        fetchData(true);
     };
 
     const handleStopServer = async () => {
         try {
             await api.stopServer();
-            fetchData(); // Refetch all data to get updated proxy status
+            fetchData(false); // Background update, don't collapse UI
         } catch (err) {
             const message = err instanceof Error ? err.message : 'Failed to stop server.';
             addToast(message, 'error');
@@ -201,7 +201,7 @@ const App: React.FC = () => {
                     const bestServer = successfulTests[0];
                     await api.startServer(sub.id, bestServer.server_id);
                     addToast(`Connected via ${sub.name} to ${bestServer.remarks} (${bestServer.ping_ms}ms)`, 'success');
-                    fetchData(); // Refetch all data
+                    fetchData(false); // Background update
                     connected = true;
                     break;
                 }
@@ -265,9 +265,9 @@ const App: React.FC = () => {
                         <SubscriptionList
                             subscriptions={subscriptions}
                             onAdd={() => setIsAddModalOpen(true)}
-                            refreshList={fetchData}
+                            refreshList={() => fetchData(false)} // Background update
                             currentStatus={currentStatus}
-                            onConnect={fetchData} // Use fetchData to get all updated state
+                            onConnect={() => fetchData(false)} // Background update
                         />
                     </div>
                 </main>
