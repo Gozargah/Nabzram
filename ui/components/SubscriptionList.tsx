@@ -329,29 +329,31 @@ const SubscriptionItem: React.FC<SubscriptionItemProps> = ({ subscription, refre
                     </div>
                 </div>
 
-                <div className={`transition-[max-height] duration-200 ease-in-out overflow-hidden ${isExpanded ? 'max-h-[1000px]' : 'max-h-0'}`}>
-                    <div className={`px-4 pb-2 pt-4 bg-background/50 transition-all duration-200 ease-in-out transform ${isExpanded ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-2'}`}>
-                        {isLoadingServers && (
-                            <div className="flex justify-center items-center py-4">
-                                <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-primary"></div>
-                            </div>
-                        )}
-                        {serverError && <p className="text-destructive text-center py-4">{serverError}</p>}
-                        {servers && servers.length > 0 && servers.map(server => (
-                            <ServerItem
-                                key={server.id}
-                                server={server}
-                                subscriptionId={subscription.id}
-                                isConnected={currentStatus?.status === ServerStatus.RUNNING && currentStatus?.server_id === server.id}
-                                onConnect={onConnect}
-                                testResult={testResults[server.id] || null}
-                            />
-                        ))}
-                        {servers && servers.length === 0 && (
-                            <div className="text-center text-muted-foreground py-4">
-                                <p>No servers found in this subscription.</p>
-                            </div>
-                        )}
+                <div className={`grid transition-[grid-template-rows] duration-200 ease-in-out ${isExpanded ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}>
+                    <div className="overflow-hidden">
+                        <div className={`px-4 pb-2 pt-4 bg-background/50 transition-all duration-200 ease-in-out transform ${isExpanded ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-2'}`}>
+                            {isLoadingServers && (
+                                <div className="flex justify-center items-center py-4">
+                                    <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-primary"></div>
+                                </div>
+                            )}
+                            {serverError && <p className="text-destructive text-center py-4">{serverError}</p>}
+                            {servers && servers.length > 0 && servers.map(server => (
+                                <ServerItem
+                                    key={server.id}
+                                    server={server}
+                                    subscriptionId={subscription.id}
+                                    isConnected={currentStatus?.status === ServerStatus.RUNNING && currentStatus?.server_id === server.id}
+                                    onConnect={onConnect}
+                                    testResult={testResults[server.id] || null}
+                                />
+                            ))}
+                            {servers && servers.length === 0 && (
+                                <div className="text-center text-muted-foreground py-4">
+                                    <p>No servers found in this subscription.</p>
+                                </div>
+                            )}
+                        </div>
                     </div>
                 </div>
             </div>
