@@ -125,7 +125,6 @@ dependencies = [
     { name = "certifi" },
     { name = "charset-normalizer" },
     { name = "idna" },
-    { name = "netifaces" },
     { name = "nuitka" },
     { name = "pillow" },
     { name = "platformdirs" },
@@ -159,7 +158,6 @@ requires-dist = [
     { name = "certifi", specifier = "==2025.8.3" },
     { name = "charset-normalizer", specifier = "==3.4.3" },
     { name = "idna", specifier = "==3.10" },
-    { name = "netifaces", specifier = "==0.11.0" },
     { name = "nuitka", specifier = ">=2.7.16" },
     { name = "pillow", specifier = "==11.3.0" },
     { name = "platformdirs", specifier = "==4.4.0" },
@@ -183,12 +181,6 @@ requires-dist = [
 
 [package.metadata.requires-dev]
 dev = [{ name = "ruff", specifier = ">=0.14.0" }]
-
-[[package]]
-name = "netifaces"
-version = "0.11.0"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/a6/91/86a6eac449ddfae239e93ffc1918cf33fd9bab35c04d1e963b311e347a73/netifaces-0.11.0.tar.gz", hash = "sha256:043a79146eb2907edf439899f262b3dfe41717d34124298ed281139a8b93ca32", size = 30106 }
 
 [[package]]
 name = "nuitka"

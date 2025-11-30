@@ -7,7 +7,6 @@ import subprocess
 from typing import Any, Dict
 from uuid import UUID
 
-import netifaces
 from pydantic import ValidationError
 
 # only for Windows
@@ -41,19 +40,23 @@ def validation_error_reply(e: ValidationError) -> Dict[str, Any]:
 
 def get_default_network_service_mac_os() -> str:
     """
-    Get the default network service for macOS by matching the default interface from netifaces.gateways()
-    with the output of 'networksetup -listnetworkserviceorder'. If no match, just return the first service in order.
+    Get the default network service for macOS by matching the default interface
+    from 'route get default' with the output of 'networksetup -listnetworkserviceorder'.
+    If no match, just return the first service in order.
     """
 
-    # Get default interface from netifaces
-    default_gateway = netifaces.gateways().get("default", {})
-    default_iface = None
-    if default_gateway:
-        for family in default_gateway.keys():
-            gateway_info = default_gateway[family]
-            if isinstance(gateway_info, tuple) and len(gateway_info) >= 2:
-                default_iface = gateway_info[1]
+    # Get default interface from 'route get default'
+    try:
+        route_output = subprocess.check_output(["route", "get", "default"]).decode(errors="ignore")
+        default_iface = None
+        for line in route_output.splitlines():
+            line = line.strip()
+            if line.startswith("interface:"):
+                default_iface = line.split(":", 1)[1].strip()
                 break
+    except Exception as e:
+        logging.warning(f"Failed to get default route: {e}")
+        default_iface = None
 
     # Parse networksetup -listnetworkserviceorder for mapping of service name <-> device
     try:

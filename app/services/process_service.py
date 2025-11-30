@@ -17,7 +17,6 @@ from shutil import which
 from socket import AF_INET, SOCK_STREAM, socket
 from uuid import UUID
 
-import netifaces
 from requests import get as http_get
 from requests.exceptions import RequestException, Timeout
 
@@ -80,41 +79,6 @@ class ProcessManager:
             )
 
         # No fallback - return None if not set in database
-        return None
-
-    def get_default_network_interface(self) -> str | None:
-        """Get the default network interface for the current system."""
-        try:
-            # Get the interface associated with the default gateway
-            default_gateway = netifaces.gateways().get("default", {})
-            if default_gateway:
-                for family in default_gateway.keys():
-                    gateway_info = default_gateway[family]
-                    if isinstance(gateway_info, tuple) and len(gateway_info) >= 2:
-                        interface = gateway_info[1]
-                        logger.info(f"Detected default network interface: {interface}")
-                        return interface
-
-            # Fallback: find the first non-loopback interface with an IP
-            interfaces = netifaces.interfaces()
-            for interface in interfaces:
-                if interface.startswith("lo"):
-                    continue  # Skip loopback interfaces
-
-                addr_info = netifaces.ifaddresses(interface)
-                if netifaces.AF_INET in addr_info:
-                    addrs = addr_info[netifaces.AF_INET]
-                    for addr in addrs:
-                        ip = addr.get("addr", "")
-                        if ip and not ip.startswith("127."):  # Not loopback
-                            logger.info(f"Fallback: Using network interface: {interface}")
-                            return interface
-
-        except Exception as e:
-            logger.warning(f"Failed to detect default network interface: {e}")
-            return None
-
-        logger.warning("No suitable network interface found")
         return None
 
     def check_xray_availability(self) -> dict[str, any]:
@@ -204,6 +168,139 @@ class ProcessManager:
         except Exception as e:
             return {"available": False, "error": str(e)}
 
+    def check_xray_capabilities(self) -> tuple[bool, str]:
+        """Check if xray has the required capabilities to set SO_MARK on Linux.
+
+        Returns:
+            Tuple[bool, str]: (has_capabilities, error_message)
+        """
+        if platform.system() != "Linux":
+            return True, ""  # Not needed on non-Linux systems
+
+        try:
+            xray_binary = self.get_effective_xray_binary()
+
+            # Use getcap to check if the binary has the required capabilities
+            result = subprocess.run(
+                ["getcap", xray_binary],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+
+            if result.returncode != 0:
+                return False, "getcap failed or binary has no capabilities"
+
+            output = result.stdout.strip()
+            if not output:
+                return False, "No capabilities found"
+
+            # Check if both cap_net_admin and cap_net_raw are present
+            has_net_admin = "cap_net_admin" in output
+            has_net_raw = "cap_net_raw" in output
+
+            if has_net_admin and has_net_raw:
+                logger.info("Xray has required capabilities for SO_MARK")
+                return True, ""
+
+            return False, f"Missing capabilities. Current: {output}"
+
+        except FileNotFoundError:
+            return False, "getcap command not found"
+        except subprocess.TimeoutExpired:
+            return False, "getcap timeout"
+        except Exception as e:
+            logger.exception(f"Failed to check xray capabilities: {e}")
+            return False, str(e)
+
+    def set_xray_capabilities(self, binary_path: str) -> tuple[bool, str]:
+        """Set required capabilities on xray binary using setcap.
+
+        Returns:
+            Tuple[bool, str]: (success, error_message)
+        """
+        if platform.system() != "Linux":
+            return True, ""
+
+        # First try with sudo -n (non-interactive, uses cached credentials)
+        try:
+            result = subprocess.run(
+                ["sudox", "-n", "setcap", "cap_net_admin,cap_net_raw+ep", binary_path],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+
+            if result.returncode == 0:
+                logger.info(f"Successfully set capabilities on {binary_path} (cached credentials)")
+                return True, ""
+
+            logger.debug(f"Sudo -n failed with return code {result.returncode}")
+        except FileNotFoundError:
+            logger.debug("sudo command not found")
+        except subprocess.TimeoutExpired:
+            logger.debug("sudo command timed out")
+        except Exception as e:
+            logger.debug(f"Sudo attempt failed: {e}")
+
+        # If that fails, try with pkexec (polkit - prompts for password)
+        try:
+            logger.info("Cached sudo credentials not available, trying pkexec")
+            result = subprocess.run(
+                ["pkexec", "setcap", "cap_net_admin,cap_net_raw+ep", binary_path],
+                capture_output=True,
+                text=True,
+                timeout=60,
+            )
+
+            if result.returncode == 0:
+                logger.info(f"Successfully set capabilities on {binary_path} (via pkexec)")
+                return True, ""
+
+            error_msg = result.stderr or "pkexec setcap failed"
+            logger.error(f"Failed to set capabilities via pkexec: {error_msg}")
+            return False, error_msg
+
+        except FileNotFoundError:
+            logger.error("pkexec command not found")
+            return False, "Neither sudo nor pkexec found"
+        except subprocess.TimeoutExpired:
+            logger.error("pkexec timed out waiting for user input")
+            return False, "pkexec timed out"
+        except Exception as e:
+            logger.exception(f"Failed to set xray capabilities via pkexec: {e}")
+            return False, str(e)
+
+    def ensure_xray_capabilities(self) -> tuple[bool, str]:
+        """Ensure xray has the required capabilities, set them if missing.
+
+        Returns:
+            Tuple[bool, str]: (has_capabilities, message)
+        """
+        if platform.system() != "Linux":
+            return True, "Not required on this platform"
+
+        has_caps, error = self.check_xray_capabilities()
+
+        if has_caps:
+            return True, "Xray has required capabilities"
+
+        # Capabilities are missing, try to set them
+        logger.info(f"Xray missing required capabilities: {error}")
+        logger.info("Attempting to set capabilities automatically...")
+
+        xray_binary = self.get_effective_xray_binary()
+        success, set_error = self.set_xray_capabilities(xray_binary)
+
+        if success:
+            logger.info("Successfully set xray capabilities")
+            return True, "Capabilities set successfully"
+
+        error_msg = f"Failed to set capabilities: {set_error}"
+        logger.error(error_msg)
+        logger.error(f"Please run manually: sudo setcap cap_net_admin,cap_net_raw+ep {xray_binary}")
+        return False, error_msg
+
     def start_single_server(
         self,
         server_id: UUID,
@@ -287,65 +384,119 @@ class ProcessManager:
 
         return config
 
-    def _apply_default_network_interface(self, config: dict) -> dict:
-        """Apply default network interface to outbound configurations that don't have streamSettings.sockopt.interface defined."""
-        try:
-            default_interface = self.get_default_network_interface()
-            if not default_interface:
-                logger.debug("No default network interface available, skipping interface injection")
-                return config
+    def _ensure_direct_outbound(self, config: dict) -> dict:
+        """Ensure that a 'direct' outbound with 'direct' tag exists in the configuration."""
+        modified_config = deepcopy(config)
 
-            modified_config = deepcopy(config)
-            outbounds = modified_config.get("outbounds", [])
+        # Ensure outbounds section exists
+        if "outbounds" not in modified_config:
+            modified_config["outbounds"] = []
 
-            if not outbounds:
-                return modified_config
+        # Check if 'direct' tag already exists
+        has_direct_outbound = any(
+            outbound.get("tag", "").lower() == "direct" for outbound in modified_config["outbounds"]
+        )
 
-            interface_added_count = 0
+        if not has_direct_outbound:
+            # Append default 'direct' outbound configuration
+            direct_outbound = {
+                "protocol": "freedom",
+                "tag": "direct",
+                "settings": {},
+            }
+            modified_config["outbounds"].append(direct_outbound)
+            logger.info("Added missing 'direct' outbound to configuration")
 
-            for outbound in outbounds:
-                # Skip if outbound already has sockopt.interface defined
-                stream_settings = outbound.get("streamSettings", {})
-                sockopt = stream_settings.get("sockopt", {})
+        return modified_config
 
-                if "interface" in sockopt:
-                    logger.debug(
-                        f"Outbound {outbound.get('tag', '-')} already has interface defined: {sockopt.get('interface')}"
-                    )
-                    continue
+    def _ensure_routing_rules(self, config: dict) -> dict:
+        """Ensure that routing rules for private IPs and domains exist."""
+        modified_config = deepcopy(config)
 
-                # Add default interface to this outbound
-                if "streamSettings" not in outbound:
-                    outbound["streamSettings"] = {}
-                if "sockopt" not in outbound["streamSettings"]:
-                    outbound["streamSettings"]["sockopt"] = {}
+        # Ensure routing section exists
+        if "routing" not in modified_config:
+            modified_config["routing"] = {}
+        if "rules" not in modified_config["routing"]:
+            modified_config["routing"]["rules"] = []
 
-                outbound["streamSettings"]["sockopt"]["interface"] = default_interface
+        # Expected rules for private IPs and domains
+        expected_rules = [
+            {
+                "ip": ["geoip:private"],
+                "outboundTag": "direct",
+                "type": "field",
+            },
+            {
+                "domain": ["geosite:private"],
+                "outboundTag": "direct",
+                "type": "field",
+            },
+        ]
 
-                download_settings = (
-                    stream_settings.get("xhttpSettings", {}).get("extra", {}).get("downloadSettings", {})
-                )
+        # Track which rules exist
+        existing_rules = modified_config["routing"]["rules"]
+        added_any = False
 
-                if download_settings:
-                    if "sockopt" not in download_settings:
-                        download_settings["sockopt"] = {}
-                    if "interface" not in download_settings["sockopt"]:
-                        download_settings["sockopt"]["interface"] = default_interface
+        # Check for IP rule (geoip:private)
+        has_ip_rule = any(
+            rule.get("type") == "field" and rule.get("outboundTag") == "direct" and rule.get("ip") == ["geoip:private"]
+            for rule in existing_rules
+        )
 
-                interface_added_count += 1
+        if not has_ip_rule:
+            existing_rules.append(expected_rules[0])
+            added_any = True
+            logger.info("Added missing routing rule for geoip:private")
 
-                logger.debug(f"Added default interface '{default_interface}' to outbound {outbound.get('tag', '-')}")
+        # Check for domain rule (geosite:private)
+        has_domain_rule = any(
+            rule.get("type") == "field"
+            and rule.get("outboundTag") == "direct"
+            and rule.get("domain") == ["geosite:private"]
+            for rule in existing_rules
+        )
 
-            if interface_added_count > 0:
-                logger.info(
-                    f"Applied default network interface '{default_interface}' to {interface_added_count} outbound(s)"
-                )
+        if not has_domain_rule:
+            existing_rules.append(expected_rules[1])
+            added_any = True
+            logger.info("Added missing routing rule for geosite:private")
 
+        if not added_any and len(existing_rules) == 0:
+            logger.debug("Routing rules already exist or were added")
+
+        return modified_config
+
+    def _ensure_sockopt_mark(self, config: dict) -> dict:
+        """Ensure all outbounds have streamSettings.sockopt.mark = 438 on Linux."""
+        if platform.system() != "Linux":
+            return config
+
+        modified_config = deepcopy(config)
+
+        # Ensure outbounds section exists
+        if "outbounds" not in modified_config:
             return modified_config
 
-        except Exception as e:
-            logger.warning(f"Failed to apply default network interface: {e}")
-            return config
+        modified = False
+        for outbound in modified_config["outbounds"]:
+            # Ensure streamSettings exists
+            if "streamSettings" not in outbound:
+                outbound["streamSettings"] = {}
+
+            # Ensure sockopt exists
+            if "sockopt" not in outbound["streamSettings"]:
+                outbound["streamSettings"]["sockopt"] = {}
+
+            # Set mark to 438 if not already set
+            current_mark = outbound["streamSettings"]["sockopt"].get("mark")
+            if current_mark != 438:
+                outbound["streamSettings"]["sockopt"]["mark"] = 438
+                modified = True
+
+        if modified:
+            logger.info("Applied sockopt.mark = 438 to all outbounds on Linux")
+
+        return modified_config
 
     def start_server(
         self,
@@ -354,6 +505,7 @@ class ProcessManager:
         config: dict,
         socks_port: int | None = None,
         http_port: int | None = None,
+        is_test: bool = False,
     ) -> tuple[bool, str | None]:
         """Start a server with the given configuration and optional port overrides.
 
@@ -372,11 +524,24 @@ class ProcessManager:
             # Apply log level override at runtime (not stored in database)
             runtime_config = self._apply_log_level_override(runtime_config)
 
-            # Apply default network interface to outbounds at runtime (not stored in database)
-            runtime_config = self._apply_default_network_interface(runtime_config)
+            # Ensure direct outbound exists
+            runtime_config = self._ensure_direct_outbound(runtime_config)
+
+            # Ensure routing rules exist
+            runtime_config = self._ensure_routing_rules(runtime_config)
+
+            # Ensure sockopt.mark = 438 on Linux
+            runtime_config = self._ensure_sockopt_mark(runtime_config)
+
+            # ENSURE xray has required capabilities on Linux (set them if missing)
+            if not is_test and platform.system() == "Linux":
+                self.ensure_xray_capabilities()
 
             # Convert config to JSON string with UUID support
             config_json = json.dumps(runtime_config, indent=2, cls=UUIDEncoder)
+
+            # open(f"config_{server_id}.json", "w").write(config_json)
+
             logger.debug(
                 f"Starting server {server_id} with config size: {len(config_json)} bytes",
             )
@@ -890,6 +1055,7 @@ class ProcessManager:
                     config,
                     socks_port,
                     http_port,
+                    is_test=True,
                 )
                 if not success:
                     error_detail = error_msg or "Failed to start server"

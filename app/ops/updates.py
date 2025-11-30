@@ -54,6 +54,12 @@ def update_xray(payload: dict[str, Any]) -> dict[str, Any]:
 
         ok = service.download_xray(request_version, xray_binary)
         if ok:
+            # Ensure xray has required capabilities on Linux
+            try:
+                process_manager.ensure_xray_capabilities()
+            except Exception as e:
+                logger.warning(f"Could not ensure xray capabilities after update: {e}")
+
             # Restart currently running server
             try:
                 if process_manager.current_server_id and process_manager.is_server_running(
