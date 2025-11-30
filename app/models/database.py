@@ -1,5 +1,6 @@
 """Database models for TinyDB storage."""
 
+import json
 from datetime import datetime
 from enum import Enum
 from typing import Any, Optional
@@ -26,6 +27,20 @@ class ServerModel(BaseModel):
     @field_serializer("id")
     def serialize_id(self, value: UUID) -> str:
         return str(value)
+
+    @property
+    def json_config(self) -> str:
+        """Get the server configuration as formatted JSON string."""
+        def serialize_uuids(obj):
+            if isinstance(obj, UUID):
+                return str(obj)
+            elif isinstance(obj, dict):
+                return {k: serialize_uuids(v) for k, v in obj.items()}
+            elif isinstance(obj, list):
+                return [serialize_uuids(item) for item in obj]
+            return obj
+        
+        return json.dumps(serialize_uuids(self.raw), indent=2)
 
 
 class SubscriptionModel(BaseModel):

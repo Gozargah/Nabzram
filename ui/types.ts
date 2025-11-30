@@ -204,3 +204,30 @@ export interface AppearanceUpdate {
 export interface AppearanceUpdateResponse extends AppearanceResponse {
   message: string;
 }
+
+export interface GetServerJsonResponse {
+  success: boolean;
+  server_id: string;
+  subscription_id: string;
+  remarks: string;
+  json_config: string;
+}
+
+export interface RestartResult {
+  success: boolean;
+  message: string;
+  server_id: string;
+  subscription_id: string;
+  remarks: string;
+  was_running: boolean;
+  action: 'restarted' | 'no_action';
+}
+
+export interface UpdateServerJsonResponse {
+  success: boolean;
+  message: string;
+  server_id: string;
+  subscription_id: string;
+  remarks: string;
+  restart_result: RestartResult;
+}

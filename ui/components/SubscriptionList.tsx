@@ -1,9 +1,11 @@
+
 import React, { useState } from 'react';
 import { Subscription, Server, ServerStatusResponse, ServerStatus, ServerTestResult } from '../types';
 import * as api from '../services/api';
-import { TrashIcon, PencilIcon, RefreshIcon, ChevronRightIcon, PlusIcon, ConnectIcon, PingIcon, LightningBoltIcon } from './icons';
+import { TrashIcon, PencilIcon, RefreshIcon, ChevronRightIcon, PlusIcon, ConnectIcon, PingIcon, LightningBoltIcon, CodeIcon } from './icons';
 import EditSubscriptionModal from './EditSubscriptionModal';
 import ConfirmDeleteModal from './ConfirmDeleteModal';
+import JsonEditorModal from './JsonEditorModal';
 import { useToast } from '../contexts/ToastContext';
 import { formatBytes } from './utils';
 
@@ -66,13 +68,15 @@ interface ServerItemProps {
     isConnected: boolean;
     onConnect: () => void;
     testResult: ServerTestResult | null;
+    onOpenJsonEditor: () => void;
 }
 
-const ServerItem: React.FC<ServerItemProps> = ({ server, subscriptionId, isConnected, onConnect, testResult }) => {
+const ServerItem: React.FC<ServerItemProps> = ({ server, subscriptionId, isConnected, onConnect, testResult, onOpenJsonEditor }) => {
     const [isConnecting, setIsConnecting] = useState(false);
     const { addToast } = useToast();
 
-    const handleConnect = async () => {
+    const handleConnect = async (e: React.MouseEvent) => {
+        e.stopPropagation();
         setIsConnecting(true);
         try {
             await api.startServer(subscriptionId, server.id);
@@ -91,12 +95,21 @@ const ServerItem: React.FC<ServerItemProps> = ({ server, subscriptionId, isConne
         : 'bg-secondary text-secondary-foreground hover:bg-secondary/80';
 
     return (
-        <div className={`bg-muted/50 p-3 rounded-md mb-2 flex items-center justify-between transition-all ${isConnected ? 'border-l-4 border-success' : 'border-l-4 border-transparent'}`}>
-            <div className="flex-1 flex items-center min-w-0 mr-2">
-                <p className="flex-1 text-muted-foreground truncate text-sm">{server.remarks}</p>
+        <div className={`group bg-muted/50 p-3 rounded-md mb-2 flex items-center justify-between transition-all ${isConnected ? 'border-l-4 border-success' : 'border-l-4 border-transparent'}`}>
+            <div 
+                className="flex-1 flex items-center min-w-0 mr-2"
+            >
+                <p className="flex-1 text-muted-foreground group-hover:text-foreground transition-colors truncate text-sm">{server.remarks}</p>
             </div>
-            <div className="flex items-center space-x-3">
+            <div className="flex items-center space-x-2">
                 {testResult && <PingResult result={testResult} />}
+                <button
+                    onClick={(e) => { e.stopPropagation(); onOpenJsonEditor(); }}
+                    className="flex items-center justify-center w-9 h-9 rounded-full bg-secondary text-secondary-foreground hover:bg-secondary/80 transition-colors shadow-sm"
+                    title="Edit JSON Config"
+                >
+                    <CodeIcon className="h-4 w-4" />
+                </button>
                 <button
                     onClick={handleConnect}
                     disabled={isConnected || isConnecting}
@@ -136,6 +149,7 @@ const SubscriptionItem: React.FC<SubscriptionItemProps> = ({ subscription, refre
     const [isDeleting, setIsDeleting] = useState(false);
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
     const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+    const [editingServer, setEditingServer] = useState<{ id: string, name: string } | null>(null);
     const [testResults, setTestResults] = useState<Record<string, ServerTestResult>>({});
     const [isTesting, setIsTesting] = useState(false);
     const [isAutoConnecting, setIsAutoConnecting] = useState(false);
@@ -346,6 +360,7 @@ const SubscriptionItem: React.FC<SubscriptionItemProps> = ({ subscription, refre
                                     isConnected={currentStatus?.status === ServerStatus.RUNNING && currentStatus?.server_id === server.id}
                                     onConnect={onConnect}
                                     testResult={testResults[server.id] || null}
+                                    onOpenJsonEditor={() => setEditingServer({ id: server.id, name: server.remarks })}
                                 />
                             ))}
                             {servers && servers.length === 0 && (
@@ -371,6 +386,14 @@ const SubscriptionItem: React.FC<SubscriptionItemProps> = ({ subscription, refre
                 onConfirm={handleConfirmDelete}
                 isDeleting={isDeleting}
             />}
+            {editingServer && (
+                <JsonEditorModal
+                    subscriptionId={subscription.id}
+                    serverId={editingServer.id}
+                    serverName={editingServer.name}
+                    onClose={() => setEditingServer(null)}
+                />
+            )}
         </>
     );
 };

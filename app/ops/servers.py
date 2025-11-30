@@ -176,3 +176,48 @@ def test_subscription_servers(subscription_id: str) -> dict[str, Any]:
             for r in results
         ],
     }
+
+
+def restart_server_if_running(subscription_id: str, server_id: str) -> dict[str, Any]:
+    """Restart server if it's currently running."""
+    sid = to_uuid(subscription_id)
+    srv_id = to_uuid(server_id)
+    
+    # Check if server exists
+    server = db.get_server(sid, srv_id)
+    if not server:
+        return error_reply("Server not found")
+    
+    # Check if server is running
+    was_running = process_manager.is_server_running(srv_id)
+    
+    if was_running:
+        # Stop the server
+        stop_result = stop_server()
+        if not stop_result.get("success"):
+            return error_reply(f"Failed to stop server: {stop_result.get('message', 'Unknown error')}")
+        
+        # Start the server with updated configuration
+        start_result = start_server(subscription_id, server_id)
+        if not start_result.get("success"):
+            return error_reply(f"Failed to restart server: {start_result.get('message', 'Unknown error')}")
+        
+        return {
+            "success": True,
+            "message": f"Server '{server.remarks}' restarted successfully",
+            "server_id": str(srv_id),
+            "subscription_id": str(sid),
+            "remarks": server.remarks,
+            "was_running": True,
+            "action": "restarted",
+        }
+    else:
+        return {
+            "success": True,
+            "message": f"Server '{server.remarks}' was not running, no restart needed",
+            "server_id": str(srv_id),
+            "subscription_id": str(sid),
+            "remarks": server.remarks,
+            "was_running": False,
+            "action": "no_action",
+        }

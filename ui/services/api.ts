@@ -25,7 +25,9 @@ import {
     LogStreamBatchResponse,
     AppearanceResponse,
     AppearanceUpdate,
-    AppearanceUpdateResponse
+    AppearanceUpdateResponse,
+    GetServerJsonResponse,
+    UpdateServerJsonResponse
 } from '../types';
 
 // A promise that resolves with the pywebview api object once it's available.
@@ -152,4 +154,12 @@ export async function getAppearance(): Promise<AppearanceResponse> {
 
 export async function updateAppearance(data: AppearanceUpdate): Promise<AppearanceUpdateResponse> {
     return callApp('update_appearance', data);
+}
+
+export async function getServerJson(subscriptionId: string, serverId: string): Promise<GetServerJsonResponse> {
+    return callApp<GetServerJsonResponse>('get_server_json', subscriptionId, serverId);
+}
+
+export async function updateServerJson(subscriptionId: string, serverId: string, jsonConfig: string): Promise<UpdateServerJsonResponse> {
+    return callApp<UpdateServerJsonResponse>('update_server_json', subscriptionId, serverId, jsonConfig);
 }

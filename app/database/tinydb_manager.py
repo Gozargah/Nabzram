@@ -1,5 +1,6 @@
 """TinyDB database manager for persistent storage."""
 
+import json
 import os
 import platform
 import shutil
@@ -304,7 +305,34 @@ class DatabaseManager:
                     return server
         return None
 
-    
+    def update_server_config(
+        self,
+        subscription_id: UUID,
+        server_id: UUID,
+        new_json_config: str,
+    ) -> ServerModel | None:
+        """Update server configuration with new JSON."""
+        try:
+            # Parse and validate JSON
+            new_config = json.loads(new_json_config)
+            if not isinstance(new_config, dict):
+                raise ValueError("Configuration must be a JSON object")
+        except json.JSONDecodeError as e:
+            raise ValueError(f"Invalid JSON: {e}")
+        
+        with self._db_operation():
+            subscription = self.get_subscription(subscription_id)
+            if subscription:
+                for i, server in enumerate(subscription.servers):
+                    if server.id == server_id:
+                        # Update the raw configuration
+                        subscription.servers[i].raw = new_config
+                        self.update_subscription_servers(
+                            subscription_id,
+                            subscription.servers,
+                        )
+                        return subscription.servers[i]
+            return None
 
     # Settings operations
     def get_settings(self) -> SettingsModel:

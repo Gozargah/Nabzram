@@ -3,7 +3,9 @@
 import logging
 from typing import Any
 
+from app.database import db
 from app.ops import appearance, logs, servers, settings, subscriptions, system, updates
+from app.ops.utils import to_uuid
 
 
 class OperationsApi:
@@ -70,6 +72,53 @@ class OperationsApi:
 
     def test_subscription_servers(self, subscription_id: str) -> dict[str, Any]:
         return servers.test_subscription_servers(subscription_id)
+
+    def get_server_json(self, subscription_id: str, server_id: str) -> dict[str, Any]:
+        """Get server configuration as JSON."""
+        sid = to_uuid(subscription_id)
+        srv_id = to_uuid(server_id)
+        server = db.get_server(sid, srv_id)
+        
+        if not server:
+            return {"success": False, "message": "Server not found"}
+        
+        return {
+            "success": True,
+            "server_id": str(srv_id),
+            "subscription_id": str(sid),
+            "remarks": server.remarks,
+            "json_config": server.json_config,
+        }
+
+    def update_server_json(self, subscription_id: str, server_id: str, json_config: str) -> dict[str, Any]:
+        """Update server configuration and restart if running."""
+        try:
+            # Update the server configuration
+            updated_server = db.update_server_config(
+                to_uuid(subscription_id),
+                to_uuid(server_id),
+                json_config
+            )
+            
+            if not updated_server:
+                return {"success": False, "message": "Server not found"}
+            
+            # Restart the server if it was running
+            restart_result = servers.restart_server_if_running(subscription_id, server_id)
+            
+            return {
+                "success": True,
+                "message": f"Server configuration updated successfully. {restart_result.get('message', '')}",
+                "server_id": server_id,
+                "subscription_id": subscription_id,
+                "remarks": updated_server.remarks,
+                "restart_result": restart_result,
+            }
+            
+        except ValueError as e:
+            return {"success": False, "message": str(e)}
+        except Exception as e:
+            return {"success": False, "message": f"Unexpected error: {str(e)}"}
 
     # ──────────────────────────────
     # System
