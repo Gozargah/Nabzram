@@ -29,14 +29,16 @@ class SubscriptionService:
         self.session.close()
 
     def _normalize_url(self, url: str) -> str:
-        """Normalize subscription URL by appending /v2ray-json if missing."""
+        """Normalize subscription URL for consistent requests."""
         url = str(url).rstrip("/")
-
-        # Check if URL already ends with v2ray-json or similar
-        if not any(endpoint in url.lower() for endpoint in ["/v2ray-json", "/v2ray", "/json"]):
-            url = urljoin(url + "/", "v2ray-json")
-
         return url
+
+    def _fallback_json_url(self, url: str) -> str:
+        """Build a JSON endpoint fallback URL for subscriptions."""
+        normalized_url = str(url).rstrip("/")
+        if any(endpoint in normalized_url.lower() for endpoint in ["/v2ray-json", "/v2ray", "/json"]):
+            return normalized_url
+        return urljoin(normalized_url + "/", "v2ray-json")
 
     def _parse_subscription_userinfo(
         self,
@@ -91,23 +93,33 @@ class SubscriptionService:
         url: str,
     ) -> tuple[list[dict[str, Any]], SubscriptionUserInfo | None]:
         """Fetch and parse subscription configuration and user info."""
+        normalized_url = self._normalize_url(url)
+        fallback_url = self._fallback_json_url(normalized_url)
+        urls_to_try = [normalized_url]
+        if fallback_url != normalized_url:
+            urls_to_try.append(fallback_url)
+
         try:
-            response = self.session.get(url)
-            response.raise_for_status()
-
-            # Parse subscription-userinfo header if present
+            config_data = None
             user_info = None
-            userinfo_header = response.headers.get("subscription-userinfo")
-            if userinfo_header:
-                user_info = self._parse_subscription_userinfo(userinfo_header)
+            response = None
 
-            # Try to parse as JSON
-            try:
-                config_data = response.json()
-            except JSONDecodeError:
-                # If not JSON, might be base64 encoded or other format
-                msg = "Invalid subscription format: not valid JSON"
-                raise ValueError(msg)
+            for candidate_url in urls_to_try:
+                response = self.session.get(candidate_url)
+                response.raise_for_status()
+
+                # Parse subscription-userinfo header if present
+                userinfo_header = response.headers.get("subscription-userinfo")
+                if userinfo_header:
+                    user_info = self._parse_subscription_userinfo(userinfo_header)
+
+                try:
+                    config_data = response.json()
+                    break
+                except JSONDecodeError:
+                    if candidate_url == urls_to_try[-1]:
+                        msg = "Invalid subscription format: not valid JSON"
+                        raise ValueError(msg)
 
             # Handle different response formats
             configs = None
@@ -256,7 +268,6 @@ class SubscriptionService:
                     id=existing_server.id,
                     remarks=remarks,
                     raw=clean_config,
-                    
                 )
             else:
                 server = ServerModel(
