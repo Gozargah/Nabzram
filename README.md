@@ -15,7 +15,7 @@
 
 A modern GUI application for managing and connecting to **Marzban subscription servers**. Built with Python and React, wrapped in a native desktop application using pywebview.
 
-> **Important**: This app is made specifically for Marzban subscriptions. It runs Xray-core and exposes SOCKS/HTTP proxies to your system. **System-wide proxy configuration is now supported** - TUN interface is not yet implemented.
+> **Important**: This app is made specifically for Marzban subscriptions. It runs Xray-core and can route traffic via **system proxy** or **TUN mode**, with optional DNS hijack and custom routing rules.
 
 ![Nabzram](https://img.shields.io/github/v/release/gozargah/nabzram?label=version&color=blue)
 ![Downloads](https://img.shields.io/github/downloads/gozargah/nabzram/total?label=downloads&color=green)
@@ -44,7 +44,10 @@ No installation required – just run the executable for your platform!
 - **📱 Modern UI**: Clean, responsive interface with dark theme
 - **🔧 System Tray**: Minimize to system tray with quick access
 - **🔗 Marzban Integration**: Add and connect to Marzban subscription servers
-- **🌐 System-wide Proxy**: Automatically configure proxy to your system
+- **🛡️ TUN Mode**: Route all traffic through a TUN interface (requires Xray 26.7.11+, may prompt for administrator rights)
+- **🧭 Custom Routing**: Send matching domain / IP / port / protocol / process traffic to bypass, proxy, or block
+- **🏷️ DNS Hijack**: Optionally hijack DNS through the proxy
+- **🌐 System Proxy**: Automatically configure the OS SOCKS proxy when connected
 - **🎨 Customizable Settings**: Configure Xray paths, ports, and appearance preferences
 - **🖥️ Cross-Platform**: Native desktop app supporting Windows, macOS, and Linux
 
@@ -199,10 +202,21 @@ Available options:
 ### Settings
 
 Configure the application through the Settings modal:
+
+**General**
+- **System Proxy**: Apply OS SOCKS proxy on connect (skipped while TUN mode is on)
+- **TUN Mode**: Capture all traffic through a TUN interface
+- **DNS Hijack**: Route DNS (port 53) through the proxy
 - **Xray Binary Path**: Custom path to Xray executable
 - **Assets Folder**: Xray assets directory
-- **SOCKS Port**: Default SOCKS proxy port
-- **HTTP Port**: Default HTTP proxy port
+- **SOCKS / HTTP Ports**: Local inbound port overrides
+
+**Routing**
+- Custom rules with domain, IP, port, protocol, and process matchers
+- Actions: bypass, proxy, or block
+
+**Appearance**
+- Theme and font preferences
 
 ## Usage
 
@@ -220,7 +234,7 @@ Configure the application through the Settings modal:
 3. Monitor connection status and logs
 4. Use the disconnect button to stop the connection
 
-**Note**: Connections expose SOCKS and HTTP proxies to your system. You'll need to configure your applications to use these proxies manually - no system-wide proxy or TUN interface is configured.
+Traffic is handled according to your VPN settings: system proxy and/or TUN mode, plus any custom routing rules and DNS hijack.
 
 ## Architecture
 
