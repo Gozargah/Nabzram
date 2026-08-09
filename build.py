@@ -63,11 +63,13 @@ def build_with_nuitka() -> None:
     # Platform-specific options (GUI backend handled by pywebview + runtime, icons here)
     system = platform.system().lower()
     if system == "windows":
-        # Windows: CEF backend (used at runtime), disable console and set ICO icon
+        # Windows: CEF backend (used at runtime), disable console and set ICO icon.
+        # Python 3.13 requires MSVC; MinGW is unsupported by Nuitka for that version.
         nuitka_cmd.extend(
             [
                 "--windows-console-mode=disable",
                 "--windows-icon-from-ico=assets/icon.ico",
+                "--msvc=latest",
             ],
         )
     elif system == "darwin":

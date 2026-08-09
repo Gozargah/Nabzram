@@ -179,6 +179,7 @@ jobs:
             pywebview
           windows-console-mode: disable
           windows-icon-from-ico: assets/icon.ico
+          msvc: latest
           output-file: nabzram-windows-${{ matrix.arch }}
 
       # macOS (icon + app name)
