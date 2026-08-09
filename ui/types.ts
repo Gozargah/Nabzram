@@ -84,6 +84,7 @@ export interface SettingsResponse {
   xray_assets_folder: string | null;
   xray_log_level: string | null;
   system_proxy: boolean;
+  tun_mode: boolean;
 }
 
 export interface SettingsUpdate {
@@ -93,6 +94,7 @@ export interface SettingsUpdate {
   xray_assets_folder?: string | null;
   xray_log_level?: string | null;
   system_proxy?: boolean;
+  tun_mode?: boolean;
 }
 
 export interface SystemInfo {
@@ -162,6 +164,12 @@ export interface ServerStartResponse {
   server_id: string;
   status: 'running';
   remarks: string;
+}
+
+export interface ApiErrorData {
+  requires_xray_update?: boolean;
+  required_version?: string;
+  current_version?: string | null;
 }
 
 export interface ServerStopResponse {

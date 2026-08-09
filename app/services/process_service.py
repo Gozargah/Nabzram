@@ -15,6 +15,7 @@ from queue import Empty, Queue
 from random import randint
 from shutil import which
 from socket import AF_INET, SOCK_STREAM, socket
+from tempfile import NamedTemporaryFile
 from uuid import UUID
 
 from requests import get as http_get
@@ -22,6 +23,7 @@ from requests.exceptions import RequestException, Timeout
 
 from app.database import db
 from app.models.database import ProcessInfo
+from app.services.elevation import popen_elevated
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +48,7 @@ class ProcessManager:
         self.log_queues: dict[UUID, Queue] = {}
         self.log_threads: dict[UUID, threading.Thread] = {}
         self.current_server_id: UUID | None = None  # Track the currently running server
+        self._temp_config_paths: dict[UUID, str] = {}
 
     def get_effective_xray_binary(self) -> str:
         """Get the effective xray binary path from database settings or system PATH."""
@@ -225,7 +228,7 @@ class ProcessManager:
         # First try with sudo -n (non-interactive, uses cached credentials)
         try:
             result = subprocess.run(
-                ["sudox", "-n", "setcap", "cap_net_admin,cap_net_raw+ep", binary_path],
+                ["sudo", "-n", "setcap", "cap_net_admin,cap_net_raw+ep", binary_path],
                 capture_output=True,
                 text=True,
                 timeout=5,
@@ -498,6 +501,99 @@ class ProcessManager:
 
         return modified_config
 
+    def _get_tun_interface_name(self) -> str:
+        """Pick a platform-appropriate TUN interface name that is not already in use."""
+        system = platform.system()
+        if system == "Darwin":
+            existing: set[str] = set()
+            try:
+                output = subprocess.check_output(
+                    ["ifconfig", "-l"],
+                    text=True,
+                    stderr=subprocess.DEVNULL,
+                )
+                existing = set(output.split())
+            except (OSError, subprocess.SubprocessError) as e:
+                logger.warning(f"Could not list macOS interfaces for TUN naming: {e}")
+
+            for index in range(256):
+                name = f"utun{index}"
+                if name not in existing:
+                    return name
+            return "utun0"
+
+        # Windows (Wintun) and Linux use a dedicated adapter name.
+        return "nabzram0"
+
+    def _build_tun_inbound(self) -> dict:
+        """Build the TUN inbound configuration for the current platform."""
+        return {
+            "tag": "tun",
+            "protocol": "tun",
+            "settings": {
+                "name": self._get_tun_interface_name(),
+                "desc": "Wintun",
+                "mtu": 1500,
+                "gateway": [
+                    "172.19.0.1/16",
+                    "fd00::1/64",
+                ],
+                "dns": [
+                    "1.1.1.1",
+                    "8.8.8.8",
+                ],
+                "autoSystemRoutingTable": [
+                    "0.0.0.0/0",
+                    "::/0",
+                ],
+                "autoOutboundsInterface": "auto",
+            },
+            "sniffing": {
+                "destOverride": [
+                    "http",
+                    "tls",
+                    "fakedns",
+                ],
+                "enabled": True,
+                "metadataOnly": False,
+                "routeOnly": True,
+            },
+        }
+
+    def _ensure_tun_inbound(self, config: dict) -> dict:
+        """Add or remove the TUN inbound based on the tun_mode setting."""
+        tun_mode = False
+        try:
+            db_settings = db.get_settings()
+            tun_mode = bool(getattr(db_settings, "tun_mode", False))
+        except Exception as e:
+            logger.warning(f"Failed to read tun_mode setting: {e}")
+
+        modified_config = deepcopy(config)
+        if "inbounds" not in modified_config:
+            modified_config["inbounds"] = []
+
+        # Always strip any existing tun inbound so toggles off cleanly.
+        before_count = len(modified_config["inbounds"])
+        modified_config["inbounds"] = [
+            inbound
+            for inbound in modified_config["inbounds"]
+            if inbound.get("tag", "").lower() != "tun" and inbound.get("protocol", "").lower() != "tun"
+        ]
+        removed = before_count - len(modified_config["inbounds"])
+        if removed:
+            logger.info(f"Removed {removed} existing TUN inbound(s) from configuration")
+
+        if not tun_mode:
+            return modified_config
+
+        tun_inbound = self._build_tun_inbound()
+        modified_config["inbounds"].append(tun_inbound)
+        logger.info(
+            f"Added TUN inbound with interface name '{tun_inbound['settings']['name']}'",
+        )
+        return modified_config
+
     def start_server(
         self,
         server_id: UUID,
@@ -533,6 +629,15 @@ class ProcessManager:
             # Ensure sockopt.mark = 438 on Linux
             runtime_config = self._ensure_sockopt_mark(runtime_config)
 
+            # Inject TUN inbound when TUN mode is enabled (skip for URL tests)
+            tun_mode = False
+            if not is_test:
+                runtime_config = self._ensure_tun_inbound(runtime_config)
+                try:
+                    tun_mode = bool(getattr(db.get_settings(), "tun_mode", False))
+                except Exception as e:
+                    logger.warning(f"Failed to read tun_mode setting: {e}")
+
             # ENSURE xray has required capabilities on Linux (set them if missing)
             if not is_test and platform.system() == "Linux":
                 self.ensure_xray_capabilities()
@@ -559,24 +664,42 @@ class ProcessManager:
                     f"Setting XRAY_LOCATION_ASSET environment variable to: {xray_assets_folder}",
                 )
 
-            # Create subprocess
-            # On Windows, hide the console window
+            # Create subprocess. TUN mode needs administrator privileges.
             creationflags = 0
             if platform.system() == "Windows":
                 creationflags = subprocess.CREATE_NO_WINDOW
 
-            process = subprocess.Popen(
-                [xray_binary, "run", "-config", "stdin:"],
-                stdin=subprocess.PIPE,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                env=env,
-                creationflags=creationflags,
-            )
+            if tun_mode:
+                with NamedTemporaryFile(
+                    mode="w",
+                    suffix=".json",
+                    prefix="nabzram-xray-",
+                    delete=False,
+                    encoding="utf-8",
+                ) as config_file:
+                    config_file.write(config_json)
+                    config_path = config_file.name
+                self._temp_config_paths[server_id] = config_path
+                logger.info(
+                    f"Starting server {server_id} in TUN mode with elevated privileges",
+                )
+                process = popen_elevated(
+                    [xray_binary, "run", "-config", config_path],
+                    env=env,
+                )
+            else:
+                process = subprocess.Popen(
+                    [xray_binary, "run", "-config", "stdin:"],
+                    stdin=subprocess.PIPE,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    env=env,
+                    creationflags=creationflags,
+                )
 
-            # Send config via stdin
-            process.stdin.write(config_json.encode())
-            process.stdin.close()
+                # Send config via stdin
+                process.stdin.write(config_json.encode())
+                process.stdin.close()
 
             # Store process information with runtime config (including port overrides)
             process_info = ProcessInfo(
@@ -603,7 +726,8 @@ class ProcessManager:
             self.log_threads[server_id] = log_thread
 
             # Give the process a moment to start and check if it's still running
-            time.sleep(0.1)
+            # Elevated starts may wait on a password prompt; allow a bit longer.
+            time.sleep(1.0 if tun_mode else 0.1)
 
             if process.poll() is not None:
                 # Process died immediately, clean up and return failure
@@ -614,7 +738,7 @@ class ProcessManager:
                 # Try to read any error output
                 error_details = f"Process exited with code {process.returncode}"
                 try:
-                    remaining_output = process.stdout.read()
+                    remaining_output = process.stdout.read() if process.stdout else b""
                     if remaining_output:
                         error_msg = remaining_output.decode(
                             "utf-8",
@@ -626,6 +750,7 @@ class ProcessManager:
                     logger.debug(f"Failed to read error output: {ex}")
 
                 # Clean up
+                self._cleanup_temp_config(server_id)
                 if server_id in self.running_processes:
                     del self.running_processes[server_id]
                 if server_id in self.process_handles:
@@ -644,6 +769,7 @@ class ProcessManager:
             logger.exception(f"Failed to start server {server_id}: {error_msg}")
 
             # Clean up on exception
+            self._cleanup_temp_config(server_id)
             if server_id in self.running_processes:
                 del self.running_processes[server_id]
 
@@ -655,6 +781,16 @@ class ProcessManager:
                 del self.log_threads[server_id]
 
             return False, f"Failed to start server: {error_msg}"
+
+    def _cleanup_temp_config(self, server_id: UUID) -> None:
+        """Remove a temporary config file created for elevated TUN starts."""
+        config_path = self._temp_config_paths.pop(server_id, None)
+        if not config_path:
+            return
+        try:
+            os.unlink(config_path)
+        except OSError as e:
+            logger.debug(f"Failed to remove temp config {config_path}: {e}")
 
     def stop_server(self, server_id: UUID) -> bool:
         """Stop a running server."""
@@ -679,6 +815,7 @@ class ProcessManager:
             # Clean up
             del self.running_processes[server_id]
             del self.process_handles[server_id]
+            self._cleanup_temp_config(server_id)
 
             # Clean up log queue and thread
             if server_id in self.log_queues:
@@ -851,6 +988,10 @@ class ProcessManager:
     def _read_process_logs(self, server_id: UUID, process: subprocess.Popen) -> None:
         """Read logs from a process and queue them."""
         try:
+            if process.stdout is None:
+                logger.debug(f"No stdout pipe for server {server_id}; skipping log reader")
+                return
+
             while True:
                 # Use readline to avoid blocking
                 line_bytes = process.stdout.readline()

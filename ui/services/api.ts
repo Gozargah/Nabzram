@@ -27,8 +27,19 @@ import {
     AppearanceUpdate,
     AppearanceUpdateResponse,
     GetServerJsonResponse,
-    UpdateServerJsonResponse
+    UpdateServerJsonResponse,
+    ApiErrorData
 } from '../types';
+
+export class ApiError extends Error {
+    data: ApiErrorData;
+
+    constructor(message: string, data: ApiErrorData = {}) {
+        super(message);
+        this.name = 'ApiError';
+        this.data = data;
+    }
+}
 
 // A promise that resolves with the pywebview api object once it's available.
 // This is cached so we don't have to poll every time.
@@ -70,8 +81,7 @@ async function callApp<T>(method: string, ...args: any[]): Promise<T> {
   }
   const res = await api[method].apply(api, args);
   if (res && typeof res === 'object' && res.success === false) {
-    const extra = res.data && Object.keys(res.data).length ? ` (${JSON.stringify(res.data)})` : '';
-    throw new Error(`${res.message || 'Operation failed'}${extra}`);
+    throw new ApiError(res.message || 'Operation failed', res.data || {});
   }
   return res as T;
 }
@@ -100,7 +110,10 @@ export async function refreshSubscriptionServers(id: string): Promise<Subscripti
     return callApp('refresh_subscription_servers', id);
 }
 
-export async function startServer(subscriptionId: string, serverId: string): Promise<ServerStartResponse> {
+export async function startServer(
+    subscriptionId: string,
+    serverId: string,
+): Promise<ServerStartResponse> {
     return callApp('start_server', subscriptionId, serverId);
 }
 

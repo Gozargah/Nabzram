@@ -5,12 +5,14 @@ interface ModalProps {
     children: ReactNode;
     onClose: () => void;
     bodyClassName?: string;
+    closeDisabled?: boolean;
 }
 
-const Modal: React.FC<ModalProps> = ({ title, children, onClose, bodyClassName }) => {
+const Modal: React.FC<ModalProps> = ({ title, children, onClose, bodyClassName, closeDisabled = false }) => {
     const [isClosing, setIsClosing] = useState(false);
 
     const handleClose = () => {
+        if (closeDisabled) return;
         setIsClosing(true);
         // Match the duration in tailwind.config animation
         setTimeout(() => {
@@ -30,7 +32,7 @@ const Modal: React.FC<ModalProps> = ({ title, children, onClose, bodyClassName }
         return () => {
             window.removeEventListener('keydown', handleKeyDown);
         };
-    }, []);
+    }, [closeDisabled]);
 
     return (
         <div 
@@ -43,7 +45,11 @@ const Modal: React.FC<ModalProps> = ({ title, children, onClose, bodyClassName }
             >
                 <div className="flex justify-between items-center p-4 border-b border-border flex-shrink-0">
                     <h2 className="text-xl font-semibold text-card-foreground">{title}</h2>
-                    <button onClick={handleClose} className="text-muted-foreground hover:text-foreground transition-colors">
+                    <button
+                        onClick={handleClose}
+                        disabled={closeDisabled}
+                        className="text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                         </svg>

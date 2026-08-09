@@ -36,6 +36,8 @@ import ToastContainer from './components/ToastContainer';
 import { useToast } from './contexts/ToastContext';
 import InstallationRequired from './components/InstallationRequired';
 import LogStreamModal from './components/LogStreamModal';
+import TunXrayUpdateModal, { TunXrayUpdateRequest } from './components/TunXrayUpdateModal';
+import { ApiError } from './services/api';
 
 interface PywebviewApi {
     // Window controls
@@ -115,6 +117,7 @@ const App: React.FC = () => {
     const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
     const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false);
     const [isLogModalOpen, setIsLogModalOpen] = useState(false);
+    const [tunUpdateRequest, setTunUpdateRequest] = useState<TunXrayUpdateRequest | null>(null);
     const { addToast } = useToast();
 
     const fetchData = useCallback(async (showLoading = true) => {
@@ -199,11 +202,26 @@ const App: React.FC = () => {
 
                 if (successfulTests.length > 0) {
                     const bestServer = successfulTests[0];
-                    await api.startServer(sub.id, bestServer.server_id);
-                    addToast(`Connected via ${sub.name} to ${bestServer.remarks} (${bestServer.ping_ms}ms)`, 'success');
-                    fetchData(false); // Background update
-                    connected = true;
-                    break;
+                    try {
+                        await api.startServer(sub.id, bestServer.server_id);
+                        addToast(`Connected via ${sub.name} to ${bestServer.remarks} (${bestServer.ping_ms}ms)`, 'success');
+                        fetchData(false); // Background update
+                        connected = true;
+                        break;
+                    } catch (startErr) {
+                        if (startErr instanceof ApiError && startErr.data?.requires_xray_update) {
+                            setTunUpdateRequest({
+                                subscriptionId: sub.id,
+                                serverId: bestServer.server_id,
+                                requiredVersion: startErr.data.required_version || '26.7.11',
+                                currentVersion: startErr.data.current_version ?? null,
+                                remarks: bestServer.remarks,
+                            });
+                            connected = true;
+                            break;
+                        }
+                        throw startErr;
+                    }
                 }
             } catch (err) {
                 const detail = err instanceof Error ? err.message : `Failed to test subscription.`;
@@ -268,6 +286,7 @@ const App: React.FC = () => {
                             refreshList={() => fetchData(false)} // Background update
                             currentStatus={currentStatus}
                             onConnect={() => fetchData(false)} // Background update
+                            onRequiresTunUpdate={setTunUpdateRequest}
                         />
                     </div>
                 </main>
@@ -344,6 +363,16 @@ const App: React.FC = () => {
             )}
             {isLogModalOpen && (
                 <LogStreamModal onClose={() => setIsLogModalOpen(false)} />
+            )}
+            {tunUpdateRequest && (
+                <TunXrayUpdateModal
+                    request={tunUpdateRequest}
+                    onClose={() => setTunUpdateRequest(null)}
+                    onSuccess={() => {
+                        setTunUpdateRequest(null);
+                        fetchData(false);
+                    }}
+                />
             )}
         </div>
     );

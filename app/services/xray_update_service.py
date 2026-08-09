@@ -11,6 +11,8 @@ from zipfile import ZipFile
 
 from requests import get as http_get
 
+from app.services.elevation import install_file
+
 logger = logging.getLogger(__name__)
 
 
@@ -304,11 +306,6 @@ class XrayUpdateService:
     def _extract_and_install(self, zip_file: Path, target_path: str) -> None:
         """Extract zip file and install xray binary."""
         try:
-            # Create target directory if it doesn't exist
-            target_dir = os.path.dirname(target_path)
-            if target_dir:
-                os.makedirs(target_dir, exist_ok=True)
-
             # Extract zip file
             with ZipFile(zip_file, "r") as zip_ref:
                 # Look for xray binary in the zip
@@ -322,9 +319,13 @@ class XrayUpdateService:
                         with NamedTemporaryFile(delete=False) as temp_binary:
                             temp_binary.write(zip_ref.read(file_info.filename))
                             temp_binary_path = temp_binary.name
-                        # Make it executable and move to target location
+                        # Make it executable and install (elevates when needed)
                         os.chmod(temp_binary_path, 0o755)
-                        move(temp_binary_path, target_path)
+                        try:
+                            install_file(temp_binary_path, target_path)
+                        finally:
+                            if os.path.exists(temp_binary_path):
+                                os.unlink(temp_binary_path)
                         xray_found = True
                         break
 

@@ -7,7 +7,7 @@ from pydantic import ValidationError
 
 from app.database import db
 from app.models.schemas import SettingsUpdate
-from app.ops.utils import error_reply, validation_error_reply
+from app.ops.utils import clear_socks_system_proxy, error_reply, validation_error_reply
 from app.services.process_service import process_manager
 
 logger = logging.getLogger(__name__)
@@ -23,11 +23,14 @@ def get_settings() -> dict[str, Any]:
         "xray_assets_folder": s.xray_assets_folder,
         "xray_log_level": getattr(s, "xray_log_level", None),
         "system_proxy": getattr(s, "system_proxy", True),
+        "tun_mode": getattr(s, "tun_mode", False),
     }
 
 
 def update_settings(payload: dict[str, Any]) -> dict[str, Any]:
     """Update settings and optionally restart current server."""
+    from app.ops import servers
+
     try:
         update = SettingsUpdate.model_validate(payload)
     except ValidationError as e:
@@ -42,7 +45,7 @@ def update_settings(payload: dict[str, Any]) -> dict[str, Any]:
 
     db.update_settings(s)
 
-    # Optionally restart current server if running with new ports
+    # Optionally restart current server if running with new settings
     try:
         if process_manager.current_server_id and process_manager.is_server_running(
             process_manager.current_server_id,
@@ -51,17 +54,18 @@ def update_settings(payload: dict[str, Any]) -> dict[str, Any]:
                 process_manager.current_server_id,
             )
             if server_info:
-                process_manager.stop_server(process_manager.current_server_id)
-                ok, _err = process_manager.start_single_server(
-                    server_info.server_id,
-                    server_info.subscription_id,
-                    server_info.config,
-                    s.socks_port,
-                    s.http_port,
-                )
-
-                if ok:
+                subscription_id = str(server_info.subscription_id)
+                server_id = str(server_info.server_id)
+                # Clear any existing system proxy before restarting with new VPN mode.
+                clear_socks_system_proxy()
+                process_manager.stop_server(server_info.server_id)
+                start_result = servers.start_server(subscription_id, server_id)
+                if start_result.get("success"):
                     logger.info("Server restarted after settings update")
+                else:
+                    logger.warning(
+                        f"Server restart after settings update failed: {start_result.get('message')}",
+                    )
     except Exception as e:
         logger.exception(f"Failed to restart server after settings update: {e}")
 
@@ -74,4 +78,5 @@ def update_settings(payload: dict[str, Any]) -> dict[str, Any]:
         "xray_assets_folder": s.xray_assets_folder,
         "xray_log_level": getattr(s, "xray_log_level", None),
         "system_proxy": getattr(s, "system_proxy", True),
+        "tun_mode": getattr(s, "tun_mode", False),
     }

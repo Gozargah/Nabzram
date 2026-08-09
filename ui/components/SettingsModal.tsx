@@ -68,6 +68,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onSaveSuccess, i
                 xray_assets_folder: currentSettings.xray_assets_folder ?? undefined,
                 xray_log_level: currentSettings.xray_log_level ?? undefined,
                 system_proxy: currentSettings.system_proxy ?? false,
+                tun_mode: currentSettings.tun_mode ?? false,
             };
             setSettings(fetchedSettings);
             setXrayBinaryInput(currentSettings.xray_binary ?? '');
@@ -92,6 +93,9 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onSaveSuccess, i
         if (settings.system_proxy !== initialSettings.current.system_proxy) {
             changes.system_proxy = settings.system_proxy;
         }
+        if (settings.tun_mode !== initialSettings.current.tun_mode) {
+            changes.tun_mode = settings.tun_mode;
+        }
         if (settings.xray_log_level !== initialSettings.current.xray_log_level) {
             changes.xray_log_level = settings.xray_log_level || null;
         }
@@ -107,7 +111,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onSaveSuccess, i
                     addToast(message, 'error');
                 });
         }
-    }, [settings.system_proxy, settings.xray_log_level, addToast]);
+    }, [settings.system_proxy, settings.tun_mode, settings.xray_log_level, addToast]);
 
     // Auto-save with debounce for ports and assets folder
     useEffect(() => {
@@ -199,6 +203,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onSaveSuccess, i
                             <div className="space-y-6">
                                 <div>
                                     <h3 className="text-md font-semibold text-foreground mb-3">VPN Settings</h3>
+                                    <div className="space-y-3">
                                      <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
                                         <div>
                                             <label htmlFor="system-proxy-toggle" className="text-sm font-medium text-foreground select-none">
@@ -223,6 +228,32 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onSaveSuccess, i
                                                 }`}
                                             />
                                         </button>
+                                    </div>
+                                     <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                                        <div>
+                                            <label htmlFor="tun-mode-toggle" className="text-sm font-medium text-foreground select-none">
+                                                Enable TUN Mode
+                                            </label>
+                                            <p className="text-xs text-muted-foreground/80 mt-1">Route all traffic through VPN. Requires Xray 26.7.11+.</p>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            role="switch"
+                                            aria-checked={settings.tun_mode}
+                                            onClick={() => setSettings(prev => ({...prev, tun_mode: !prev.tun_mode}))}
+                                            disabled={isVpnActive}
+                                            className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-card disabled:cursor-not-allowed disabled:opacity-50 ${
+                                                settings.tun_mode ? 'bg-primary' : 'bg-input'
+                                            }`}
+                                        >
+                                            <span
+                                                aria-hidden="true"
+                                                className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                                                    settings.tun_mode ? 'translate-x-5' : 'translate-x-0'
+                                                }`}
+                                            />
+                                        </button>
+                                    </div>
                                     </div>
                                 </div>
 

@@ -29,8 +29,10 @@ class SettingsUpdate(BaseModel):
         None,
         description="Xray log level override (debug, info, warning, error, none)",
     )
-    system_proxy: Optional[bool] = Field(
-        None, description="Enable OS-level system proxy management"
+    system_proxy: Optional[bool] = Field(None, description="Enable OS-level system proxy management")
+    tun_mode: Optional[bool] = Field(
+        None,
+        description="Enable TUN mode to route all traffic through a TUN interface",
     )
 
     @field_validator("socks_port")

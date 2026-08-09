@@ -1,5 +1,6 @@
 """Server operations."""
 
+import logging
 from typing import Any
 
 from app.database import db
@@ -9,7 +10,31 @@ from app.ops.utils import (
     set_socks_system_proxy,
     to_uuid,
 )
+from app.ops.versioning import version_gte
 from app.services.process_service import process_manager
+
+logger = logging.getLogger(__name__)
+
+TUN_MIN_XRAY_VERSION = "26.7.11"
+
+
+def _check_xray_version_for_tun() -> dict[str, Any] | None:
+    """Return an error reply if current Xray is too old for TUN mode."""
+    xray_info = process_manager.check_xray_availability()
+    current_version = xray_info.get("version")
+
+    if version_gte(current_version, TUN_MIN_XRAY_VERSION):
+        return None
+
+    return error_reply(
+        f"TUN mode requires Xray {TUN_MIN_XRAY_VERSION} or newer "
+        f"(current: {current_version or 'unknown'}). Update Xray before connecting.",
+        data={
+            "requires_xray_update": True,
+            "required_version": TUN_MIN_XRAY_VERSION,
+            "current_version": current_version,
+        },
+    )
 
 
 def start_server(subscription_id: str, server_id: str) -> dict[str, Any]:
@@ -28,6 +53,12 @@ def start_server(subscription_id: str, server_id: str) -> dict[str, Any]:
             "remarks": server.remarks,
         }
     settings = db.get_settings()
+
+    if getattr(settings, "tun_mode", False):
+        version_error = _check_xray_version_for_tun()
+        if version_error is not None:
+            return version_error
+
     ok, err = process_manager.start_single_server(
         srv_id,
         sid,
@@ -37,9 +68,8 @@ def start_server(subscription_id: str, server_id: str) -> dict[str, Any]:
     )
 
     if ok:
-        
-
-        if settings.system_proxy:
+        # System proxy is redundant when TUN captures all traffic.
+        if settings.system_proxy and not getattr(settings, "tun_mode", False):
             ports = process_manager.get_current_server_port_info()
             for p in ports:
                 if p["protocol"] == "socks":
@@ -53,7 +83,7 @@ def start_server(subscription_id: str, server_id: str) -> dict[str, Any]:
             "status": "running",
             "remarks": server.remarks,
         }
-    
+
     return error_reply(err or f"Failed to start server '{server.remarks}'")
 
 
@@ -73,7 +103,6 @@ def stop_server() -> dict[str, Any]:
         for sub in subs:
             for srv in sub.servers:
                 if srv.id == current_id:
-                    
                     break
 
         settings = db.get_settings()
@@ -113,7 +142,7 @@ def get_server_status() -> dict[str, Any]:
         for srv in sub.servers:
             if srv.id == current_id:
                 server_remarks = srv.remarks
-                
+
                 break
     return {
         "success": True,
@@ -182,26 +211,26 @@ def restart_server_if_running(subscription_id: str, server_id: str) -> dict[str,
     """Restart server if it's currently running."""
     sid = to_uuid(subscription_id)
     srv_id = to_uuid(server_id)
-    
+
     # Check if server exists
     server = db.get_server(sid, srv_id)
     if not server:
         return error_reply("Server not found")
-    
+
     # Check if server is running
     was_running = process_manager.is_server_running(srv_id)
-    
+
     if was_running:
         # Stop the server
         stop_result = stop_server()
         if not stop_result.get("success"):
             return error_reply(f"Failed to stop server: {stop_result.get('message', 'Unknown error')}")
-        
+
         # Start the server with updated configuration
         start_result = start_server(subscription_id, server_id)
         if not start_result.get("success"):
             return error_reply(f"Failed to restart server: {start_result.get('message', 'Unknown error')}")
-        
+
         return {
             "success": True,
             "message": f"Server '{server.remarks}' restarted successfully",

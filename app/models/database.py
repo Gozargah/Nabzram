@@ -31,6 +31,7 @@ class ServerModel(BaseModel):
     @property
     def json_config(self) -> str:
         """Get the server configuration as formatted JSON string."""
+
         def serialize_uuids(obj):
             if isinstance(obj, UUID):
                 return str(obj)
@@ -39,7 +40,7 @@ class ServerModel(BaseModel):
             elif isinstance(obj, list):
                 return [serialize_uuids(item) for item in obj]
             return obj
-        
+
         return json.dumps(serialize_uuids(self.raw), indent=2)
 
 
@@ -103,6 +104,10 @@ class SettingsModel(BaseModel):
     )
 
     system_proxy: Optional[bool] = Field(True, description="Enable OS-level system proxy management")
+    tun_mode: Optional[bool] = Field(
+        False,
+        description="Enable TUN mode to route all traffic through a TUN interface",
+    )
 
 
 class ProcessInfo(BaseModel):

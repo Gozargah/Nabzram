@@ -2,10 +2,12 @@
 import React, { useState } from 'react';
 import { Subscription, Server, ServerStatusResponse, ServerStatus, ServerTestResult } from '../types';
 import * as api from '../services/api';
+import { ApiError } from '../services/api';
 import { TrashIcon, PencilIcon, RefreshIcon, ChevronRightIcon, PlusIcon, ConnectIcon, PingIcon, LightningBoltIcon, CodeIcon } from './icons';
 import EditSubscriptionModal from './EditSubscriptionModal';
 import ConfirmDeleteModal from './ConfirmDeleteModal';
 import JsonEditorModal from './JsonEditorModal';
+import { TunXrayUpdateRequest } from './TunXrayUpdateModal';
 import { useToast } from '../contexts/ToastContext';
 import { formatBytes } from './utils';
 
@@ -69,9 +71,10 @@ interface ServerItemProps {
     onConnect: () => void;
     testResult: ServerTestResult | null;
     onOpenJsonEditor: () => void;
+    onRequiresTunUpdate: (request: TunXrayUpdateRequest) => void;
 }
 
-const ServerItem: React.FC<ServerItemProps> = ({ server, subscriptionId, isConnected, onConnect, testResult, onOpenJsonEditor }) => {
+const ServerItem: React.FC<ServerItemProps> = ({ server, subscriptionId, isConnected, onConnect, testResult, onOpenJsonEditor, onRequiresTunUpdate }) => {
     const [isConnecting, setIsConnecting] = useState(false);
     const { addToast } = useToast();
 
@@ -83,6 +86,16 @@ const ServerItem: React.FC<ServerItemProps> = ({ server, subscriptionId, isConne
             addToast(`Connected to ${server.remarks}`, 'success');
             onConnect();
         } catch (err) {
+            if (err instanceof ApiError && err.data?.requires_xray_update) {
+                onRequiresTunUpdate({
+                    subscriptionId,
+                    serverId: server.id,
+                    requiredVersion: err.data.required_version || '26.7.11',
+                    currentVersion: err.data.current_version ?? null,
+                    remarks: server.remarks,
+                });
+                return;
+            }
             const detail = err instanceof Error ? err.message : 'An unknown error occurred.';
             addToast(`Failed to connect: ${detail}`, 'error');
         } finally {
@@ -138,9 +151,10 @@ interface SubscriptionItemProps {
     refreshList: () => void;
     currentStatus: ServerStatusResponse | null;
     onConnect: () => void;
+    onRequiresTunUpdate: (request: TunXrayUpdateRequest) => void;
 }
 
-const SubscriptionItem: React.FC<SubscriptionItemProps> = ({ subscription, refreshList, currentStatus, onConnect }) => {
+const SubscriptionItem: React.FC<SubscriptionItemProps> = ({ subscription, refreshList, currentStatus, onConnect, onRequiresTunUpdate }) => {
     const [isExpanded, setIsExpanded] = useState(false);
     const [servers, setServers] = useState<Server[] | null>(null);
     const [isLoadingServers, setIsLoadingServers] = useState(false);
@@ -267,9 +281,23 @@ const SubscriptionItem: React.FC<SubscriptionItemProps> = ({ subscription, refre
             }
 
             const bestServer = successfulTests[0];
-            await api.startServer(subscription.id, bestServer.server_id);
-            addToast(`Auto-connected to ${bestServer.remarks} (${bestServer.ping_ms}ms)`, 'success');
-            onConnect();
+            try {
+                await api.startServer(subscription.id, bestServer.server_id);
+                addToast(`Auto-connected to ${bestServer.remarks} (${bestServer.ping_ms}ms)`, 'success');
+                onConnect();
+            } catch (startErr) {
+                if (startErr instanceof ApiError && startErr.data?.requires_xray_update) {
+                    onRequiresTunUpdate({
+                        subscriptionId: subscription.id,
+                        serverId: bestServer.server_id,
+                        requiredVersion: startErr.data.required_version || '26.7.11',
+                        currentVersion: startErr.data.current_version ?? null,
+                        remarks: bestServer.remarks,
+                    });
+                    return;
+                }
+                throw startErr;
+            }
         } catch (err) {
             const detail = err instanceof Error ? err.message : 'An unknown error occurred.';
             addToast(`Failed to auto-connect: ${detail}`, 'error');
@@ -361,6 +389,7 @@ const SubscriptionItem: React.FC<SubscriptionItemProps> = ({ subscription, refre
                                     onConnect={onConnect}
                                     testResult={testResults[server.id] || null}
                                     onOpenJsonEditor={() => setEditingServer({ id: server.id, name: server.remarks })}
+                                    onRequiresTunUpdate={onRequiresTunUpdate}
                                 />
                             ))}
                             {servers && servers.length === 0 && (
@@ -406,9 +435,10 @@ interface SubscriptionListProps {
     refreshList: () => void;
     currentStatus: ServerStatusResponse | null;
     onConnect: () => void;
+    onRequiresTunUpdate: (request: TunXrayUpdateRequest) => void;
 }
 
-const SubscriptionList: React.FC<SubscriptionListProps> = ({ subscriptions, onAdd, refreshList, currentStatus, onConnect }) => {
+const SubscriptionList: React.FC<SubscriptionListProps> = ({ subscriptions, onAdd, refreshList, currentStatus, onConnect, onRequiresTunUpdate }) => {
     return (
         <div>
             <div className="flex justify-between items-center mb-4">
@@ -425,6 +455,7 @@ const SubscriptionList: React.FC<SubscriptionListProps> = ({ subscriptions, onAd
                         refreshList={refreshList}
                         currentStatus={currentStatus}
                         onConnect={onConnect}
+                        onRequiresTunUpdate={onRequiresTunUpdate}
                     />
                 ))
             ) : (
