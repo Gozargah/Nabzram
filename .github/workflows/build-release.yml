@@ -64,7 +64,7 @@ jobs:
           # Windows (x64 only)
           - os: windows
             arch: x86_64
-            runner: windows-latest
+            runner: windows-2022
 
           # macOS
           - os: macos
