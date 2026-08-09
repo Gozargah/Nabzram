@@ -128,8 +128,8 @@ export async function getXrayStatus(): Promise<SystemInfo> {
     return callApp<SystemInfo>('get_xray_status');
 }
 
-export async function getXrayVersionInfo(): Promise<XrayVersionInfo> {
-    return callApp<XrayVersionInfo>('get_xray_version_info');
+export async function getXrayVersionInfo(includePrereleases = false): Promise<XrayVersionInfo> {
+    return callApp<XrayVersionInfo>('get_xray_version_info', includePrereleases);
 }
 
 export async function updateXray(data: XrayUpdateRequest): Promise<XrayUpdateResponse> {

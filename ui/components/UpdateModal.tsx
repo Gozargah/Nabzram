@@ -20,12 +20,13 @@ const UpdateModal: React.FC<UpdateModalProps> = ({ onClose, onUpdateSuccess }) =
     const [selectedVersion, setSelectedVersion] = useState('latest');
     const [customVersion, setCustomVersion] = useState('');
     const [selectedAssetSize, setSelectedAssetSize] = useState<number | null>(null);
+    const [includePrereleases, setIncludePrereleases] = useState(false);
     const { addToast } = useToast();
 
     const fetchVersionInfo = useCallback(async () => {
         setIsLoading(true);
         try {
-            const versionInfo = await api.getXrayVersionInfo();
+            const versionInfo = await api.getXrayVersionInfo(includePrereleases);
             setInfo(versionInfo);
         } catch (err) {
             const message = err instanceof Error ? err.message : 'Failed to load version info';
@@ -33,11 +34,19 @@ const UpdateModal: React.FC<UpdateModalProps> = ({ onClose, onUpdateSuccess }) =
         } finally {
             setIsLoading(false);
         }
-    }, [addToast]);
+    }, [addToast, includePrereleases]);
 
     useEffect(() => {
         fetchVersionInfo();
     }, [fetchVersionInfo]);
+
+    useEffect(() => {
+        if (!info || selectedVersion === 'latest' || selectedVersion === 'custom') return;
+        const stillAvailable = info.available_versions.some(asset => asset.version === selectedVersion);
+        if (!stillAvailable) {
+            setSelectedVersion('latest');
+        }
+    }, [info, selectedVersion]);
 
     useEffect(() => {
         if (!info) return;
@@ -114,7 +123,10 @@ const UpdateModal: React.FC<UpdateModalProps> = ({ onClose, onUpdateSuccess }) =
         
         const versionOptions: SelectOption[] = [
             { value: 'latest', label: `Latest (${info.latest_version})` },
-            ...info.available_versions.map(asset => ({ value: asset.version, label: `${asset.version}${asset.size_bytes != null ? ` (${formatBytes(asset.size_bytes)})` : ''}` })),
+            ...info.available_versions.map(asset => ({
+                value: asset.version,
+                label: `${asset.version}${asset.prerelease ? ' (pre-release)' : ''}${asset.size_bytes != null ? ` (${formatBytes(asset.size_bytes)})` : ''}`,
+            })),
             { value: 'custom', label: 'Custom...' }
         ];
 
@@ -146,6 +158,17 @@ const UpdateModal: React.FC<UpdateModalProps> = ({ onClose, onUpdateSuccess }) =
                             options={versionOptions}
                         />
                     </div>
+
+                    <label className="flex items-center gap-2 cursor-pointer select-none">
+                        <input
+                            type="checkbox"
+                            checked={includePrereleases}
+                            onChange={(e) => setIncludePrereleases(e.target.checked)}
+                            disabled={isUpdating || isUpdatingGeodata}
+                            className="h-4 w-4 rounded border-border bg-input text-primary focus:ring-2 focus:ring-ring focus:ring-offset-0"
+                        />
+                        <span className="text-sm text-muted-foreground">Show pre-release versions</span>
+                    </label>
                     
                     {selectedVersion === 'custom' && (
                         <div>

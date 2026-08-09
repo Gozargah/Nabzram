@@ -78,7 +78,7 @@ interface PywebviewApi {
     get_xray_status: () => Promise<SystemInfo>;
 
     // Updates
-    get_xray_version_info: () => Promise<XrayVersionInfo>;
+    get_xray_version_info: (includePrereleases?: boolean) => Promise<XrayVersionInfo>;
     update_xray: (payload: XrayUpdateRequest) => Promise<XrayUpdateResponse>;
     update_geodata: () => Promise<GeodataUpdateResponse>;
 

@@ -10,15 +10,17 @@ from app.services.xray_update_service import GeodataUpdateService, XrayUpdateSer
 logger = logging.getLogger(__name__)
 
 
-def get_xray_version_info() -> dict[str, Any]:
+def get_xray_version_info(include_prereleases: bool = False) -> dict[str, Any]:
     """Get Xray version information."""
     service = XrayUpdateService()
     try:
         xray_info = process_manager.check_xray_availability()
         current_version = xray_info.get("version")
         latest_version = service.get_latest_version()
-        version_sizes = service.get_available_versions_with_sizes(limit=10)
-        available_versions = [{"version": ver, "size_bytes": version_sizes.get(ver)} for ver in version_sizes]
+        available_versions = service.get_available_versions_with_sizes(
+            limit=10,
+            include_prereleases=include_prereleases,
+        )
         return {
             "current_version": current_version,
             "latest_version": latest_version,
@@ -38,7 +40,7 @@ def update_xray(payload: dict[str, Any]) -> dict[str, Any]:
         current_version = xray_info.get("version")
 
         if request_version:
-            available = service.get_available_versions(limit=50)
+            available = service.get_available_versions(limit=50, include_prereleases=True)
             if request_version not in available and f"v{request_version}" not in available:
                 return error_reply(f"Version {request_version} is not available")
         else:

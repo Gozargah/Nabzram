@@ -110,27 +110,42 @@ class XrayUpdateService:
             msg = f"Failed to fetch latest version: {e!s}"
             raise RuntimeError(msg)
 
-    def get_available_versions(self, limit: int = 10) -> list[str]:
+    def _fetch_releases(self, fetch_limit: int) -> list[dict]:
+        """Fetch release metadata from GitHub."""
+        response = http_get(
+            f"{self.github_api_base}/releases",
+            headers={"Accept": "application/vnd.github.v3+json"},
+            params={"per_page": min(fetch_limit, 100)},
+            timeout=self.timeout,
+        )
+        response.raise_for_status()
+        data = response.json()
+        if not isinstance(data, list):
+            msg = "Unexpected GitHub releases response"
+            raise RuntimeError(msg)
+        return data
+
+    def get_available_versions(self, limit: int = 10, include_prereleases: bool = False) -> list[str]:
         """Get list of available Xray versions."""
         try:
-            response = http_get(
-                f"{self.github_api_base}/releases",
-                headers={"Accept": "application/vnd.github.v3+json"},
-                params={"per_page": limit},
-                timeout=self.timeout,
-            )
-            response.raise_for_status()
-
-            data = response.json()
+            fetch_limit = limit * 3 if not include_prereleases else limit
+            releases = self._fetch_releases(fetch_limit)
             versions = []
 
-            for release in data:
+            for release in releases:
+                if not include_prereleases and release.get("prerelease", False):
+                    continue
+
                 version = release.get("tag_name", "")
-                if version:
-                    # Normalize version
-                    if not version.startswith("v"):
-                        version = f"v{version}"
-                    versions.append(version)
+                if not version:
+                    continue
+
+                if not version.startswith("v"):
+                    version = f"v{version}"
+                versions.append(version)
+
+                if len(versions) >= limit:
+                    break
 
             return versions
 
@@ -139,38 +154,49 @@ class XrayUpdateService:
             msg = f"Failed to fetch versions: {e!s}"
             raise RuntimeError(msg)
 
-    def get_available_versions_with_sizes(self, limit: int = 10) -> dict[str, int]:
+    def get_available_versions_with_sizes(
+        self,
+        limit: int = 10,
+        include_prereleases: bool = False,
+    ) -> list[dict[str, int | bool | str]]:
         """Get available Xray versions with their download sizes."""
         try:
-            response = http_get(
-                f"{self.github_api_base}/releases",
-                headers={"Accept": "application/vnd.github.v3+json"},
-                params={"per_page": limit},
-                timeout=self.timeout,
-            )
-            response.raise_for_status()
-
-            data = response.json()
+            fetch_limit = limit * 3 if not include_prereleases else limit
+            releases = self._fetch_releases(fetch_limit)
             filename = self._build_asset_filename()
-            version_sizes = {}
+            version_entries: list[dict[str, int | bool | str]] = []
 
-            for release in data:
+            for release in releases:
+                if not include_prereleases and release.get("prerelease", False):
+                    continue
+
                 version = release.get("tag_name", "")
-                if version:
-                    # Normalize version
-                    if not version.startswith("v"):
-                        version = f"v{version}"
+                if not version:
+                    continue
 
-                    # Look for the matching asset in this release
-                    assets = release.get("assets", [])
-                    for asset in assets:
-                        if asset.get("name") == filename:
-                            size = asset.get("size")
-                            if isinstance(size, int):
-                                version_sizes[version] = size
-                            break
+                if not version.startswith("v"):
+                    version = f"v{version}"
 
-            return version_sizes
+                size_bytes: int | None = None
+                for asset in release.get("assets", []):
+                    if asset.get("name") == filename:
+                        size = asset.get("size")
+                        if isinstance(size, int):
+                            size_bytes = size
+                        break
+
+                version_entries.append(
+                    {
+                        "version": version,
+                        "size_bytes": size_bytes,
+                        "prerelease": bool(release.get("prerelease", False)),
+                    },
+                )
+
+                if len(version_entries) >= limit:
+                    break
+
+            return version_entries
 
         except Exception as e:
             logger.exception(f"Failed to get Xray versions with sizes: {e}")

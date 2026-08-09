@@ -78,10 +78,10 @@ class OperationsApi:
         sid = to_uuid(subscription_id)
         srv_id = to_uuid(server_id)
         server = db.get_server(sid, srv_id)
-        
+
         if not server:
             return {"success": False, "message": "Server not found"}
-        
+
         return {
             "success": True,
             "server_id": str(srv_id),
@@ -94,18 +94,14 @@ class OperationsApi:
         """Update server configuration and restart if running."""
         try:
             # Update the server configuration
-            updated_server = db.update_server_config(
-                to_uuid(subscription_id),
-                to_uuid(server_id),
-                json_config
-            )
-            
+            updated_server = db.update_server_config(to_uuid(subscription_id), to_uuid(server_id), json_config)
+
             if not updated_server:
                 return {"success": False, "message": "Server not found"}
-            
+
             # Restart the server if it was running
             restart_result = servers.restart_server_if_running(subscription_id, server_id)
-            
+
             return {
                 "success": True,
                 "message": f"Server configuration updated successfully. {restart_result.get('message', '')}",
@@ -114,7 +110,7 @@ class OperationsApi:
                 "remarks": updated_server.remarks,
                 "restart_result": restart_result,
             }
-            
+
         except ValueError as e:
             return {"success": False, "message": str(e)}
         except Exception as e:
@@ -129,8 +125,8 @@ class OperationsApi:
     # ──────────────────────────────
     # Updates
     # ──────────────────────────────
-    def get_xray_version_info(self) -> dict[str, Any]:
-        return updates.get_xray_version_info()
+    def get_xray_version_info(self, include_prereleases: bool = False) -> dict[str, Any]:
+        return updates.get_xray_version_info(include_prereleases=include_prereleases)
 
     def update_xray(self, payload: dict[str, Any]) -> dict[str, Any]:
         return updates.update_xray(payload)

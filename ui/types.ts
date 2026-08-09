@@ -106,6 +106,7 @@ export interface SystemInfo {
 export interface XrayAssetInfo {
     version: string;
     size_bytes: number | null;
+    prerelease?: boolean;
 }
 
 export interface XrayVersionInfo {
