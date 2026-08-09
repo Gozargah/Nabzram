@@ -77,6 +77,18 @@ export interface SubscriptionUrlTestResponse {
   results: ServerTestResult[];
 }
 
+export interface RoutingRule {
+  id: string;
+  name?: string | null;
+  action: 'bypass' | 'proxy' | 'block';
+  domain: string[];
+  ip: string[];
+  port?: string | null;
+  protocol: string[];
+  process: string[];
+  enabled: boolean;
+}
+
 export interface SettingsResponse {
   socks_port: number | null;
   http_port: number | null;
@@ -85,6 +97,7 @@ export interface SettingsResponse {
   xray_log_level: string | null;
   system_proxy: boolean;
   tun_mode: boolean;
+  routing_rules: RoutingRule[];
 }
 
 export interface SettingsUpdate {
@@ -95,6 +108,7 @@ export interface SettingsUpdate {
   xray_log_level?: string | null;
   system_proxy?: boolean;
   tun_mode?: boolean;
+  routing_rules?: RoutingRule[];
 }
 
 export interface SystemInfo {

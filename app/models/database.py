@@ -17,6 +17,26 @@ class XrayLogLevel(str, Enum):
     NONE = "none"
 
 
+class RoutingAction(str, Enum):
+    BYPASS = "bypass"
+    PROXY = "proxy"
+    BLOCK = "block"
+
+
+class RoutingRuleModel(BaseModel):
+    """Custom routing rule applied at runtime."""
+
+    id: str = Field(default_factory=lambda: str(uuid4()), description="Stable rule id")
+    name: str | None = Field(None, description="Optional display name for the rule")
+    action: RoutingAction = Field(..., description="bypass, proxy, or block")
+    domain: list[str] = Field(default_factory=list, description="Domain matchers (e.g. geosite:cn)")
+    ip: list[str] = Field(default_factory=list, description="IP matchers (e.g. geoip:cn, CIDR, IP)")
+    port: str | None = Field(None, description="Port matcher (e.g. 53,443,1000-2000)")
+    protocol: list[str] = Field(default_factory=list, description="Protocol matchers (http, tls, quic, bittorrent)")
+    process: list[str] = Field(default_factory=list, description="Process name matchers")
+    enabled: bool = Field(True, description="Whether this rule is active")
+
+
 class ServerModel(BaseModel):
     """Server model for database storage."""
 
@@ -107,6 +127,10 @@ class SettingsModel(BaseModel):
     tun_mode: Optional[bool] = Field(
         False,
         description="Enable TUN mode to route all traffic through a TUN interface",
+    )
+    routing_rules: list[RoutingRuleModel] = Field(
+        default_factory=list,
+        description="Custom routing rules for bypass, proxy, or block",
     )
 
 

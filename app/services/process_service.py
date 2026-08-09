@@ -412,6 +412,159 @@ class ProcessManager:
 
         return modified_config
 
+    def _ensure_bypass_outbound(self, config: dict) -> dict:
+        """Ensure a freedom outbound tagged 'bypass' exists."""
+        modified_config = deepcopy(config)
+        if "outbounds" not in modified_config:
+            modified_config["outbounds"] = []
+
+        has_bypass = any(outbound.get("tag", "").lower() == "bypass" for outbound in modified_config["outbounds"])
+        if not has_bypass:
+            modified_config["outbounds"].append(
+                {
+                    "protocol": "freedom",
+                    "tag": "bypass",
+                    "settings": {},
+                },
+            )
+            logger.info("Added missing 'bypass' outbound to configuration")
+
+        return modified_config
+
+    def _ensure_block_outbound(self, config: dict) -> dict:
+        """Ensure a blackhole outbound tagged 'block' exists."""
+        modified_config = deepcopy(config)
+        if "outbounds" not in modified_config:
+            modified_config["outbounds"] = []
+
+        has_block = any(outbound.get("tag", "").lower() == "block" for outbound in modified_config["outbounds"])
+        if not has_block:
+            modified_config["outbounds"].append(
+                {
+                    "protocol": "blackhole",
+                    "tag": "block",
+                    "settings": {},
+                },
+            )
+            logger.info("Added missing 'block' outbound to configuration")
+
+        return modified_config
+
+    def _resolve_proxy_outbound_tag(self, config: dict) -> str | None:
+        """Pick the primary proxy outbound tag from the config."""
+        outbounds = config.get("outbounds") or []
+        if not outbounds:
+            return None
+
+        reserved_tags = {"direct", "bypass", "block", "blocked", "reject", "blackhole", "dns-out", "api"}
+        reserved_protocols = {"freedom", "blackhole", "dns", "loopback"}
+
+        for outbound in outbounds:
+            tag = str(outbound.get("tag") or "").strip()
+            if tag.lower() == "proxy":
+                return tag
+
+        for outbound in outbounds:
+            tag = str(outbound.get("tag") or "").strip()
+            protocol = str(outbound.get("protocol") or "").strip().lower()
+            if not tag:
+                continue
+            if tag.lower() in reserved_tags:
+                continue
+            if protocol in reserved_protocols:
+                continue
+            return tag
+
+        first = outbounds[0]
+        tag = str(first.get("tag") or "").strip()
+        return tag or None
+
+    def _build_xray_rule_from_settings(self, rule, proxy_tag: str | None) -> dict | None:
+        """Convert a settings routing rule into an Xray routing rule."""
+        action = getattr(rule, "action", None)
+        action_value = action.value if hasattr(action, "value") else str(action or "")
+
+        if action_value == "bypass":
+            outbound_tag = "bypass"
+        elif action_value == "block":
+            outbound_tag = "block"
+        elif action_value == "proxy":
+            if not proxy_tag:
+                logger.warning("Skipping proxy routing rule because no proxy outbound was found")
+                return None
+            outbound_tag = proxy_tag
+        else:
+            logger.warning(f"Skipping routing rule with unknown action: {action_value}")
+            return None
+
+        xray_rule: dict = {
+            "type": "field",
+            "outboundTag": outbound_tag,
+        }
+
+        domains = [item for item in getattr(rule, "domain", []) or [] if item]
+        ips = [item for item in getattr(rule, "ip", []) or [] if item]
+        protocols = [item for item in getattr(rule, "protocol", []) or [] if item]
+        processes = [item for item in getattr(rule, "process", []) or [] if item]
+        port = getattr(rule, "port", None)
+
+        if domains:
+            xray_rule["domain"] = domains
+        if ips:
+            xray_rule["ip"] = ips
+        if port:
+            xray_rule["port"] = port
+        if protocols:
+            xray_rule["protocol"] = protocols
+        if processes:
+            xray_rule["process"] = processes
+
+        if not any([domains, ips, port, protocols, processes]):
+            return None
+
+        rule_name = getattr(rule, "name", None)
+        rule_id = getattr(rule, "id", None)
+        if rule_name:
+            xray_rule["ruleTag"] = rule_name
+        elif rule_id:
+            xray_rule["ruleTag"] = f"nabzram-{rule_id}"
+
+        return xray_rule
+
+    def _apply_custom_routing_rules(self, config: dict) -> dict:
+        """Prepend user-defined routing rules from settings."""
+        try:
+            db_settings = db.get_settings()
+            rules = getattr(db_settings, "routing_rules", None) or []
+        except Exception as e:
+            logger.warning(f"Failed to read routing_rules setting: {e}")
+            return config
+
+        enabled_rules = [rule for rule in rules if getattr(rule, "enabled", True)]
+        if not enabled_rules:
+            return config
+
+        modified_config = deepcopy(config)
+        if "routing" not in modified_config:
+            modified_config["routing"] = {}
+        if "rules" not in modified_config["routing"]:
+            modified_config["routing"]["rules"] = []
+
+        proxy_tag = self._resolve_proxy_outbound_tag(modified_config)
+        custom_rules: list[dict] = []
+        for rule in enabled_rules:
+            xray_rule = self._build_xray_rule_from_settings(rule, proxy_tag)
+            if xray_rule:
+                custom_rules.append(xray_rule)
+
+        if not custom_rules:
+            return modified_config
+
+        # Custom rules should win over subscription/default rules.
+        modified_config["routing"]["rules"] = custom_rules + modified_config["routing"]["rules"]
+        logger.info(f"Applied {len(custom_rules)} custom routing rule(s)")
+        return modified_config
+
     def _ensure_routing_rules(self, config: dict) -> dict:
         """Ensure that routing rules for private IPs and domains exist."""
         modified_config = deepcopy(config)
@@ -623,8 +776,15 @@ class ProcessManager:
             # Ensure direct outbound exists
             runtime_config = self._ensure_direct_outbound(runtime_config)
 
+            # Ensure bypass/block outbounds for custom routing actions
+            runtime_config = self._ensure_bypass_outbound(runtime_config)
+            runtime_config = self._ensure_block_outbound(runtime_config)
+
             # Ensure routing rules exist
             runtime_config = self._ensure_routing_rules(runtime_config)
+
+            # Apply user-defined routing rules (prepended for precedence)
+            runtime_config = self._apply_custom_routing_rules(runtime_config)
 
             # Ensure sockopt.mark = 438 on Linux
             runtime_config = self._ensure_sockopt_mark(runtime_config)

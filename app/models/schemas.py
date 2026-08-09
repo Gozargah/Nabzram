@@ -4,7 +4,7 @@ from typing import Optional
 
 from pydantic import BaseModel, Field, HttpUrl, field_validator, model_validator
 
-from app.models.database import XrayLogLevel
+from app.models.database import RoutingAction, RoutingRuleModel, XrayLogLevel
 
 
 class SubscriptionCreate(BaseModel):
@@ -15,6 +15,45 @@ class SubscriptionCreate(BaseModel):
 class SubscriptionUpdate(BaseModel):
     name: str | None = Field(None, description="New name for the subscription")
     url: HttpUrl | None = Field(None, description="Subscription URL")
+
+
+class RoutingRuleUpdate(BaseModel):
+    """Routing rule payload for settings updates."""
+
+    id: str | None = Field(None, description="Stable rule id")
+    name: str | None = Field(None, description="Optional display name")
+    action: RoutingAction = Field(..., description="bypass, proxy, or block")
+    domain: list[str] = Field(default_factory=list)
+    ip: list[str] = Field(default_factory=list)
+    port: str | None = Field(None)
+    protocol: list[str] = Field(default_factory=list)
+    process: list[str] = Field(default_factory=list)
+    enabled: bool = Field(True)
+
+    @field_validator("domain", "ip", "protocol", "process", mode="before")
+    @classmethod
+    def normalize_string_lists(cls, v):
+        if v is None:
+            return []
+        if isinstance(v, str):
+            return [part.strip() for part in v.split(",") if part.strip()]
+        if isinstance(v, list):
+            return [str(item).strip() for item in v if str(item).strip()]
+        return v
+
+    @field_validator("port", mode="before")
+    @classmethod
+    def normalize_port(cls, v):
+        if v is None:
+            return None
+        text = str(v).strip()
+        return text or None
+
+    def to_model(self) -> RoutingRuleModel:
+        data = self.model_dump(exclude_none=False)
+        if not data.get("id"):
+            data.pop("id", None)
+        return RoutingRuleModel.model_validate(data)
 
 
 class SettingsUpdate(BaseModel):
@@ -33,6 +72,10 @@ class SettingsUpdate(BaseModel):
     tun_mode: Optional[bool] = Field(
         None,
         description="Enable TUN mode to route all traffic through a TUN interface",
+    )
+    routing_rules: list[RoutingRuleUpdate] | None = Field(
+        None,
+        description="Custom routing rules for bypass, proxy, or block",
     )
 
     @field_validator("socks_port")

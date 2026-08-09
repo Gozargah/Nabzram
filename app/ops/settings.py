@@ -13,9 +13,7 @@ from app.services.process_service import process_manager
 logger = logging.getLogger(__name__)
 
 
-def get_settings() -> dict[str, Any]:
-    """Get current settings."""
-    s = db.get_settings()
+def _serialize_settings(s) -> dict[str, Any]:
     return {
         "socks_port": s.socks_port,
         "http_port": s.http_port,
@@ -24,7 +22,15 @@ def get_settings() -> dict[str, Any]:
         "xray_log_level": getattr(s, "xray_log_level", None),
         "system_proxy": getattr(s, "system_proxy", True),
         "tun_mode": getattr(s, "tun_mode", False),
+        "routing_rules": [
+            rule.model_dump() if hasattr(rule, "model_dump") else rule for rule in getattr(s, "routing_rules", []) or []
+        ],
     }
+
+
+def get_settings() -> dict[str, Any]:
+    """Get current settings."""
+    return _serialize_settings(db.get_settings())
 
 
 def update_settings(payload: dict[str, Any]) -> dict[str, Any]:
@@ -39,6 +45,8 @@ def update_settings(payload: dict[str, Any]) -> dict[str, Any]:
         return error_reply(f"Invalid settings: {e!s}")
 
     update_data = update.model_dump(exclude_unset=True)
+    if "routing_rules" in update_data and update.routing_rules is not None:
+        update_data["routing_rules"] = [rule.to_model() for rule in update.routing_rules]
 
     s = db.get_settings()
     s = s.model_copy(update=update_data)
@@ -72,11 +80,5 @@ def update_settings(payload: dict[str, Any]) -> dict[str, Any]:
     return {
         "success": True,
         "message": "Settings updated successfully",
-        "socks_port": s.socks_port,
-        "http_port": s.http_port,
-        "xray_binary": s.xray_binary,
-        "xray_assets_folder": s.xray_assets_folder,
-        "xray_log_level": getattr(s, "xray_log_level", None),
-        "system_proxy": getattr(s, "system_proxy", True),
-        "tun_mode": getattr(s, "tun_mode", False),
+        **_serialize_settings(s),
     }

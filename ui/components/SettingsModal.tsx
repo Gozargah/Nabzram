@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import Modal from './Modal';
 import * as api from '../services/api';
-import { SettingsUpdate } from '../types';
+import { RoutingRule, SettingsUpdate } from '../types';
 import { useTheme } from '../contexts/ThemeContext';
 import { useToast } from '../contexts/ToastContext';
 import CustomSelect, { SelectOption } from './CustomSelect';
+import RoutingRulesEditor from './RoutingRulesEditor';
 
 interface SettingsModalProps {
     onClose: () => void;
@@ -20,6 +21,9 @@ const logLevelOptions: SelectOption[] = [
     { value: 'error', label: 'Error' },
     { value: 'none', label: 'None' },
 ];
+
+const rulesEqual = (a: RoutingRule[] = [], b: RoutingRule[] = []) =>
+    JSON.stringify(a) === JSON.stringify(b);
 
 const TabButton: React.FC<{
     tabName: string;
@@ -47,11 +51,12 @@ const TabButton: React.FC<{
 
 const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onSaveSuccess, isVpnActive }) => {
     const { setTheme, themes, theme: currentThemeName, font, setFont } = useTheme();
-    const [settings, setSettings] = useState<SettingsUpdate>({});
+    const [settings, setSettings] = useState<SettingsUpdate>({ routing_rules: [] });
     const [isLoading, setIsLoading] = useState(true);
     const [isApplyingXray, setIsApplyingXray] = useState(false);
+    const [isSavingRouting, setIsSavingRouting] = useState(false);
     const [fontInput, setFontInput] = useState(font);
-    const [activeTab, setActiveTab] = useState<'general' | 'appearance'>('general');
+    const [activeTab, setActiveTab] = useState<'general' | 'routing' | 'appearance'>('general');
     const [xrayBinaryInput, setXrayBinaryInput] = useState('');
     const { addToast } = useToast();
 
@@ -69,6 +74,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onSaveSuccess, i
                 xray_log_level: currentSettings.xray_log_level ?? undefined,
                 system_proxy: currentSettings.system_proxy ?? false,
                 tun_mode: currentSettings.tun_mode ?? false,
+                routing_rules: currentSettings.routing_rules ?? [],
             };
             setSettings(fetchedSettings);
             setXrayBinaryInput(currentSettings.xray_binary ?? '');
@@ -146,6 +152,34 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onSaveSuccess, i
         };
     }, [settings.socks_port, settings.http_port, settings.xray_assets_folder, addToast]);
 
+    // Debounced save for routing rules
+    useEffect(() => {
+        if (!initialSettings.current) return;
+        if (rulesEqual(settings.routing_rules || [], initialSettings.current.routing_rules || [])) {
+            return;
+        }
+
+        const handler = setTimeout(() => {
+            setIsSavingRouting(true);
+            api.updateSettings({ routing_rules: settings.routing_rules || [] })
+                .then(() => {
+                    if (initialSettings.current) {
+                        initialSettings.current = {
+                            ...initialSettings.current,
+                            routing_rules: settings.routing_rules || [],
+                        };
+                    }
+                })
+                .catch(err => {
+                    const message = err instanceof Error ? err.message : 'Failed to save routing rules';
+                    addToast(message, 'error');
+                })
+                .finally(() => setIsSavingRouting(false));
+        }, 800);
+
+        return () => clearTimeout(handler);
+    }, [settings.routing_rules, addToast]);
+
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const { name, value } = e.target;
         if (name === 'socks_port' || name === 'http_port') {
@@ -192,6 +226,9 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onSaveSuccess, i
                              <TabButton tabName="general" currentTab={activeTab} setTab={() => setActiveTab('general')}>
                                 General
                             </TabButton>
+                            <TabButton tabName="routing" currentTab={activeTab} setTab={() => setActiveTab('routing')}>
+                                Routing
+                            </TabButton>
                             <TabButton tabName="appearance" currentTab={activeTab} setTab={() => setActiveTab('appearance')}>
                                 Appearance
                             </TabButton>
@@ -204,31 +241,6 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onSaveSuccess, i
                                 <div>
                                     <h3 className="text-md font-semibold text-foreground mb-3">VPN Settings</h3>
                                     <div className="space-y-3">
-                                     <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
-                                        <div>
-                                            <label htmlFor="system-proxy-toggle" className="text-sm font-medium text-foreground select-none">
-                                                Enable System Proxy
-                                            </label>
-                                            <p className="text-xs text-muted-foreground/80 mt-1">Automatically configure your OS proxy when connected.</p>
-                                        </div>
-                                        <button
-                                            type="button"
-                                            role="switch"
-                                            aria-checked={settings.system_proxy}
-                                            onClick={() => setSettings(prev => ({...prev, system_proxy: !prev.system_proxy}))}
-                                            disabled={isVpnActive}
-                                            className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-card disabled:cursor-not-allowed disabled:opacity-50 ${
-                                                settings.system_proxy ? 'bg-primary' : 'bg-input'
-                                            }`}
-                                        >
-                                            <span
-                                                aria-hidden="true"
-                                                className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                                                    settings.system_proxy ? 'translate-x-5' : 'translate-x-0'
-                                                }`}
-                                            />
-                                        </button>
-                                    </div>
                                      <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
                                         <div>
                                             <label htmlFor="tun-mode-toggle" className="text-sm font-medium text-foreground select-none">
@@ -250,6 +262,31 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onSaveSuccess, i
                                                 aria-hidden="true"
                                                 className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
                                                     settings.tun_mode ? 'translate-x-5' : 'translate-x-0'
+                                                }`}
+                                            />
+                                        </button>
+                                    </div>
+                                    <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                                        <div>
+                                            <label htmlFor="system-proxy-toggle" className="text-sm font-medium text-foreground select-none">
+                                                Enable System Proxy
+                                            </label>
+                                            <p className="text-xs text-muted-foreground/80 mt-1">Automatically configure your OS proxy when connected.</p>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            role="switch"
+                                            aria-checked={settings.system_proxy}
+                                            onClick={() => setSettings(prev => ({...prev, system_proxy: !prev.system_proxy}))}
+                                            disabled={isVpnActive}
+                                            className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-card disabled:cursor-not-allowed disabled:opacity-50 ${
+                                                settings.system_proxy ? 'bg-primary' : 'bg-input'
+                                            }`}
+                                        >
+                                            <span
+                                                aria-hidden="true"
+                                                className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                                                    settings.system_proxy ? 'translate-x-5' : 'translate-x-0'
                                                 }`}
                                             />
                                         </button>
@@ -344,6 +381,17 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onSaveSuccess, i
                                         />
                                     </div>
                                 </div>
+                            </div>
+                        )}
+                        {activeTab === 'routing' && (
+                            <div className="space-y-3">
+                                {isSavingRouting && (
+                                    <p className="text-xs text-muted-foreground">Saving routing rules...</p>
+                                )}
+                                <RoutingRulesEditor
+                                    rules={settings.routing_rules || []}
+                                    onChange={(routing_rules) => setSettings(prev => ({ ...prev, routing_rules }))}
+                                />
                             </div>
                         )}
                         {activeTab === 'appearance' && (
