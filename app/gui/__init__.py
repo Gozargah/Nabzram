@@ -12,6 +12,30 @@ from app.gui.window_api import WindowApi
 from settings import APP_ROOT, DATA_DIR, DEBUG
 
 
+def _disable_pystray_dbus_notifier() -> None:
+    """Avoid pystray's DBus Notifications proxy.
+
+    pystray always constructs org.freedesktop.Notifications on tray start/stop,
+    even when notifications are unused. A stuck notification daemon can block
+    those sync DBus calls for ~25s and delay both startup and quit.
+    """
+    if platform.system().lower() != "linux":
+        return
+    try:
+        from pystray._util import notify_dbus
+    except Exception:
+        return
+
+    class _NoopNotifier:
+        def notify(self, title: str, message: str, icon: str | None = None) -> None:
+            return None
+
+        def hide(self) -> None:
+            return None
+
+    notify_dbus.Notifier = _NoopNotifier  # type: ignore[misc, assignment]
+
+
 class GuiManager:
     """GUI manager for Nabzram application."""
 
@@ -22,6 +46,7 @@ class GuiManager:
         self.gui_type = self._get_gui_type()
         self.easy_drag = self._get_easy_drag()
         self.dpi_scale = self._get_dpi_scale()
+        self.tray_icon: pystray.Icon | None = None
         self._setup_environment()
 
     def _get_icon_path(self) -> str:
@@ -52,8 +77,8 @@ class GuiManager:
     def _get_dpi_scale(self) -> float:
         """Get the DPI scaling factor for the current display.
 
-        Avoids tkinter/Tcl, which Nuitka does not reliably bundle and which
-        breaks standalone Linux builds when the host Tcl SONAME differs.
+        Avoids tkinter (Tcl SONAME issues in Nuitka builds) and avoids early
+        Gdk init, which can stall GTK/WebKit startup on Linux.
         """
         for key in ("GDK_SCALE", "QT_SCALE_FACTOR"):
             raw = os.environ.get(key)
@@ -100,51 +125,62 @@ class GuiManager:
         return scale if scale > 0 else 1.0
 
     def _get_dpi_scale_linux(self) -> float:
-        import gi
+        """Match former tkinter behavior via Xft.dpi; never use EDID mm sizes."""
+        import subprocess
 
-        gi.require_version("Gdk", "3.0")
-        from gi.repository import Gdk
-
-        display = Gdk.Display.get_default()
-        if display is None:
+        try:
+            out = subprocess.check_output(
+                ["xrdb", "-query"],
+                text=True,
+                timeout=1,
+                stderr=subprocess.DEVNULL,
+            )
+        except (FileNotFoundError, subprocess.SubprocessError, OSError):
             return 1.0
 
-        monitor = display.get_primary_monitor()
-        if monitor is None and display.get_n_monitors() > 0:
-            monitor = display.get_monitor(0)
-        if monitor is None:
-            return 1.0
-
-        width_mm = monitor.get_width_mm()
-        geometry = monitor.get_geometry()
-        if width_mm > 0 and geometry.width > 0:
-            dpi = geometry.width / (width_mm / 25.4)
-            if dpi > 0:
-                return dpi / 96.0
-
-        scale = float(monitor.get_scale_factor())
-        return scale if scale > 0 else 1.0
+        for line in out.splitlines():
+            if not line.lower().startswith("xft.dpi:"):
+                continue
+            try:
+                dpi = float(line.split(":", 1)[1].strip())
+            except ValueError:
+                return 1.0
+            return dpi / 96.0 if dpi > 0 else 1.0
+        return 1.0
 
     def _setup_tray(self, window, api: WindowApi):
         """Setup system tray with left click = toggle, right click = menu."""
+        _disable_pystray_dbus_notifier()
 
         def toggle(icon, item=None) -> None:
             api.toggle()
 
-        def on_quit(icon, item) -> None:
-            api.quit()
-            icon.stop()
+        def on_quit(icon, item=None) -> None:
+            try:
+                from app.services.process_service import process_manager
+
+                process_manager.shutdown_all()
+            except Exception:
+                pass
+            try:
+                api.quit()
+            finally:
+                try:
+                    icon.stop()
+                except Exception:
+                    pass
 
         tray_icon = pystray.Icon(
             "Nabzram",
             Image.open(self.icon_path),
             menu=pystray.Menu(
-                Item("Show Window", toggle, default=True),  # 👈 default = left click
+                Item("Show Window", toggle, default=True),
                 Item("Quit", on_quit),
             ),
         )
 
         tray_icon.run_detached()
+        self.tray_icon = tray_icon
         return tray_icon
 
     def create_main_window(self, url: str, **kwargs) -> webview.Window:
