@@ -1,6 +1,5 @@
 import os
 import platform
-import tkinter as tk
 from typing import Any
 
 import pystray
@@ -51,14 +50,80 @@ class GuiManager:
             os.environ["WEBKIT_DISABLE_COMPOSITING_MODE"] = "1"
 
     def _get_dpi_scale(self) -> float:
-        """Get the DPI scaling factor for the current display."""
+        """Get the DPI scaling factor for the current display.
+
+        Avoids tkinter/Tcl, which Nuitka does not reliably bundle and which
+        breaks standalone Linux builds when the host Tcl SONAME differs.
+        """
+        for key in ("GDK_SCALE", "QT_SCALE_FACTOR"):
+            raw = os.environ.get(key)
+            if not raw:
+                continue
+            try:
+                scale = float(raw)
+            except ValueError:
+                continue
+            if scale > 0:
+                return scale
+
         try:
-            root = tk.Tk()
-            dpi = root.winfo_fpixels("1i")  # pixels per inch
-            root.destroy()
-            return dpi / 96.0  # 96 DPI is standard
+            if self.system == "windows":
+                return self._get_dpi_scale_windows()
+            if self.system == "darwin":
+                return self._get_dpi_scale_macos()
+            if self.system == "linux":
+                return self._get_dpi_scale_linux()
         except Exception:
-            return 1.0  # fallback to no scaling
+            pass
+        return 1.0
+
+    def _get_dpi_scale_windows(self) -> float:
+        import ctypes
+
+        user32 = ctypes.windll.user32
+        gdi32 = ctypes.windll.gdi32
+        user32.SetProcessDPIAware()
+        dc = user32.GetDC(0)
+        try:
+            dpi = int(gdi32.GetDeviceCaps(dc, 88))  # LOGPIXELSX
+        finally:
+            user32.ReleaseDC(0, dc)
+        return dpi / 96.0 if dpi > 0 else 1.0
+
+    def _get_dpi_scale_macos(self) -> float:
+        from AppKit import NSScreen
+
+        screen = NSScreen.mainScreen()
+        if screen is None:
+            return 1.0
+        scale = float(screen.backingScaleFactor())
+        return scale if scale > 0 else 1.0
+
+    def _get_dpi_scale_linux(self) -> float:
+        import gi
+
+        gi.require_version("Gdk", "3.0")
+        from gi.repository import Gdk
+
+        display = Gdk.Display.get_default()
+        if display is None:
+            return 1.0
+
+        monitor = display.get_primary_monitor()
+        if monitor is None and display.get_n_monitors() > 0:
+            monitor = display.get_monitor(0)
+        if monitor is None:
+            return 1.0
+
+        width_mm = monitor.get_width_mm()
+        geometry = monitor.get_geometry()
+        if width_mm > 0 and geometry.width > 0:
+            dpi = geometry.width / (width_mm / 25.4)
+            if dpi > 0:
+                return dpi / 96.0
+
+        scale = float(monitor.get_scale_factor())
+        return scale if scale > 0 else 1.0
 
     def _setup_tray(self, window, api: WindowApi):
         """Setup system tray with left click = toggle, right click = menu."""
