@@ -565,6 +565,72 @@ class ProcessManager:
         logger.info(f"Applied {len(custom_rules)} custom routing rule(s)")
         return modified_config
 
+    def _apply_dns_hijack(self, config: dict) -> dict:
+        """Add or remove dns-out outbound and port-53 hijack route based on settings."""
+        dns_hijack = True
+        try:
+            dns_hijack = bool(getattr(db.get_settings(), "dns_hijack", True))
+        except Exception as e:
+            logger.warning(f"Failed to read dns_hijack setting: {e}")
+
+        modified_config = deepcopy(config)
+        if "outbounds" not in modified_config:
+            modified_config["outbounds"] = []
+        if "routing" not in modified_config:
+            modified_config["routing"] = {}
+        if "rules" not in modified_config["routing"]:
+            modified_config["routing"]["rules"] = []
+
+        # Always strip previous nabzram dns-out pieces so toggling off is clean.
+        modified_config["outbounds"] = [
+            outbound for outbound in modified_config["outbounds"] if outbound.get("tag", "").lower() != "dns-out"
+        ]
+        modified_config["routing"]["rules"] = [
+            rule
+            for rule in modified_config["routing"]["rules"]
+            if not (
+                str(rule.get("outboundTag", "")).lower() == "dns-out"
+                and str(rule.get("port", "")) == "53"
+                and not rule.get("domain")
+                and not rule.get("ip")
+                and not rule.get("protocol")
+                and not rule.get("process")
+            )
+        ]
+
+        if not dns_hijack:
+            return modified_config
+
+        proxy_tag = self._resolve_proxy_outbound_tag(modified_config)
+        if not proxy_tag:
+            logger.warning("DNS hijack enabled but no proxy outbound was found; skipping")
+            return modified_config
+
+        dns_outbound = {
+            "tag": "dns-out",
+            "protocol": "dns",
+            "settings": {
+                "rewriteAddress": "1.1.1.1",
+                "rewriteNetwork": "udp",
+                "port": 53,
+            },
+            "proxySettings": {
+                "tag": proxy_tag,
+            },
+        }
+        modified_config["outbounds"].append(dns_outbound)
+
+        dns_rule = {
+            "type": "field",
+            "port": "53",
+            "outboundTag": "dns-out",
+            "ruleTag": "nabzram-dns-hijack",
+        }
+        # Highest priority so DNS is always captured when enabled.
+        modified_config["routing"]["rules"] = [dns_rule, *modified_config["routing"]["rules"]]
+        logger.info(f"Applied DNS hijack via dns-out -> {proxy_tag}")
+        return modified_config
+
     def _ensure_routing_rules(self, config: dict) -> dict:
         """Ensure that routing rules for private IPs and domains exist."""
         modified_config = deepcopy(config)
@@ -785,6 +851,9 @@ class ProcessManager:
 
             # Apply user-defined routing rules (prepended for precedence)
             runtime_config = self._apply_custom_routing_rules(runtime_config)
+
+            # Hijack DNS port 53 through dns-out when enabled
+            runtime_config = self._apply_dns_hijack(runtime_config)
 
             # Ensure sockopt.mark = 438 on Linux
             runtime_config = self._ensure_sockopt_mark(runtime_config)

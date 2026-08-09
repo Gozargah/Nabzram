@@ -97,6 +97,7 @@ export interface SettingsResponse {
   xray_log_level: string | null;
   system_proxy: boolean;
   tun_mode: boolean;
+  dns_hijack: boolean;
   routing_rules: RoutingRule[];
 }
 
@@ -108,6 +109,7 @@ export interface SettingsUpdate {
   xray_log_level?: string | null;
   system_proxy?: boolean;
   tun_mode?: boolean;
+  dns_hijack?: boolean;
   routing_rules?: RoutingRule[];
 }
 

@@ -73,6 +73,10 @@ class SettingsUpdate(BaseModel):
         None,
         description="Enable TUN mode to route all traffic through a TUN interface",
     )
+    dns_hijack: Optional[bool] = Field(
+        None,
+        description="Hijack DNS (port 53) via dns-out outbound through the proxy",
+    )
     routing_rules: list[RoutingRuleUpdate] | None = Field(
         None,
         description="Custom routing rules for bypass, proxy, or block",

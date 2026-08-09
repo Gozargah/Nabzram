@@ -51,7 +51,7 @@ const TabButton: React.FC<{
 
 const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onSaveSuccess, isVpnActive }) => {
     const { setTheme, themes, theme: currentThemeName, font, setFont } = useTheme();
-    const [settings, setSettings] = useState<SettingsUpdate>({ routing_rules: [] });
+    const [settings, setSettings] = useState<SettingsUpdate>({ routing_rules: [], dns_hijack: true });
     const [isLoading, setIsLoading] = useState(true);
     const [isApplyingXray, setIsApplyingXray] = useState(false);
     const [isSavingRouting, setIsSavingRouting] = useState(false);
@@ -74,6 +74,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onSaveSuccess, i
                 xray_log_level: currentSettings.xray_log_level ?? undefined,
                 system_proxy: currentSettings.system_proxy ?? false,
                 tun_mode: currentSettings.tun_mode ?? false,
+                dns_hijack: currentSettings.dns_hijack ?? true,
                 routing_rules: currentSettings.routing_rules ?? [],
             };
             setSettings(fetchedSettings);
@@ -102,6 +103,9 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onSaveSuccess, i
         if (settings.tun_mode !== initialSettings.current.tun_mode) {
             changes.tun_mode = settings.tun_mode;
         }
+        if (settings.dns_hijack !== initialSettings.current.dns_hijack) {
+            changes.dns_hijack = settings.dns_hijack;
+        }
         if (settings.xray_log_level !== initialSettings.current.xray_log_level) {
             changes.xray_log_level = settings.xray_log_level || null;
         }
@@ -117,7 +121,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onSaveSuccess, i
                     addToast(message, 'error');
                 });
         }
-    }, [settings.system_proxy, settings.tun_mode, settings.xray_log_level, addToast]);
+    }, [settings.system_proxy, settings.tun_mode, settings.dns_hijack, settings.xray_log_level, addToast]);
 
     // Auto-save with debounce for ports and assets folder
     useEffect(() => {
@@ -262,6 +266,31 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onSaveSuccess, i
                                                 aria-hidden="true"
                                                 className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
                                                     settings.tun_mode ? 'translate-x-5' : 'translate-x-0'
+                                                }`}
+                                            />
+                                        </button>
+                                    </div>
+                                     <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                                        <div>
+                                            <label htmlFor="dns-hijack-toggle" className="text-sm font-medium text-foreground select-none">
+                                                Enable DNS Hijack
+                                            </label>
+                                            <p className="text-xs text-muted-foreground/80 mt-1">Route DNS (port 53) through the proxy via dns-out.</p>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            role="switch"
+                                            aria-checked={settings.dns_hijack}
+                                            onClick={() => setSettings(prev => ({...prev, dns_hijack: !prev.dns_hijack}))}
+                                            disabled={isVpnActive}
+                                            className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-card disabled:cursor-not-allowed disabled:opacity-50 ${
+                                                settings.dns_hijack ? 'bg-primary' : 'bg-input'
+                                            }`}
+                                        >
+                                            <span
+                                                aria-hidden="true"
+                                                className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                                                    settings.dns_hijack ? 'translate-x-5' : 'translate-x-0'
                                                 }`}
                                             />
                                         </button>

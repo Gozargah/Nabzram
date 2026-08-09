@@ -22,6 +22,7 @@ def _serialize_settings(s) -> dict[str, Any]:
         "xray_log_level": getattr(s, "xray_log_level", None),
         "system_proxy": getattr(s, "system_proxy", True),
         "tun_mode": getattr(s, "tun_mode", False),
+        "dns_hijack": getattr(s, "dns_hijack", True),
         "routing_rules": [
             rule.model_dump() if hasattr(rule, "model_dump") else rule for rule in getattr(s, "routing_rules", []) or []
         ],
