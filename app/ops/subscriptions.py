@@ -150,7 +150,12 @@ def refresh_subscription_servers(subscription_id: str) -> dict[str, Any]:
             settings.http_port,
         )
 
-        db.update_subscription_with_user_info(sid, updated.servers, updated.user_info)
+        db.update_subscription_with_user_info(
+            sid,
+            updated.servers,
+            updated.user_info,
+            url=updated.url,
+        )
         return {
             "success": True,
             "message": f"Subscription '{sub.name}' updated successfully",

@@ -277,13 +277,17 @@ class DatabaseManager:
         subscription_id: UUID,
         servers: list[ServerModel],
         user_info,
+        url: str | None = None,
     ) -> SubscriptionModel | None:
         """Update servers and user info for a subscription."""
         serialized_servers = [self._serialize_for_db(server.model_dump()) for server in servers]
-        updates = {
+        updates: dict[str, Any] = {
             "servers": serialized_servers,
             "last_updated": datetime.now().isoformat(),
         }
+
+        if url:
+            updates["url"] = url
 
         # Add user_info if provided
         if user_info:
@@ -319,7 +323,7 @@ class DatabaseManager:
                 raise ValueError("Configuration must be a JSON object")
         except json.JSONDecodeError as e:
             raise ValueError(f"Invalid JSON: {e}")
-        
+
         with self._db_operation():
             subscription = self.get_subscription(subscription_id)
             if subscription:

@@ -33,12 +33,31 @@ class SubscriptionService:
         url = str(url).rstrip("/")
         return url
 
-    def _fallback_json_url(self, url: str) -> str:
-        """Build a JSON endpoint fallback URL for subscriptions."""
+    def _get_candidate_urls(self, url: str) -> list[str]:
+        """Build list of candidate URLs to try for JSON subscription configs.
+
+        Order of attempts:
+        1. Original normalized URL (e.g. /)
+        2. /v2ray-json
+        3. /v2ray
+        4. /json
+        5. /xray
+        """
         normalized_url = str(url).rstrip("/")
-        if any(endpoint in normalized_url.lower() for endpoint in ["/v2ray-json", "/v2ray", "/json"]):
-            return normalized_url
-        return urljoin(normalized_url + "/", "v2ray-json")
+        endpoints = ["", "v2ray-json", "v2ray", "json", "xray"]
+        candidates: list[str] = []
+
+        # If URL already explicitly targets one of the json endpoints, try that first
+        candidates.append(normalized_url)
+
+        for endpoint in endpoints:
+            if not endpoint:
+                continue
+            candidate = urljoin(normalized_url + "/", endpoint)
+            if candidate not in candidates:
+                candidates.append(candidate)
+
+        return candidates
 
     def _parse_subscription_userinfo(
         self,
@@ -91,20 +110,22 @@ class SubscriptionService:
     def fetch_subscription_config(
         self,
         url: str,
-    ) -> tuple[list[dict[str, Any]], SubscriptionUserInfo | None]:
-        """Fetch and parse subscription configuration and user info."""
-        normalized_url = self._normalize_url(url)
-        fallback_url = self._fallback_json_url(normalized_url)
-        urls_to_try = [normalized_url]
-        if fallback_url != normalized_url:
-            urls_to_try.append(fallback_url)
+    ) -> tuple[list[dict[str, Any]], SubscriptionUserInfo | None, str]:
+        """Fetch and parse subscription configuration, user info, and the working URL.
 
-        try:
-            config_data = None
-            user_info = None
-            response = None
+        Returns:
+            Tuple[list[dict[str, Any]], SubscriptionUserInfo | None, str]:
+                (configs, user_info, working_url)
+        """
+        urls_to_try = self._get_candidate_urls(url)
+        last_error = None
+        working_url = urls_to_try[0]
 
-            for candidate_url in urls_to_try:
+        config_data = None
+        user_info = None
+
+        for candidate_url in urls_to_try:
+            try:
                 response = self.session.get(candidate_url)
                 response.raise_for_status()
 
@@ -113,38 +134,44 @@ class SubscriptionService:
                 if userinfo_header:
                     user_info = self._parse_subscription_userinfo(userinfo_header)
 
-                try:
-                    config_data = response.json()
-                    break
-                except JSONDecodeError:
-                    if candidate_url == urls_to_try[-1]:
-                        msg = "Invalid subscription format: not valid JSON"
-                        raise ValueError(msg)
+                config_data = response.json()
+                working_url = candidate_url
+                break
+            except (HTTPError, RequestException, JSONDecodeError) as e:
+                last_error = e
+                continue
 
-            # Handle different response formats
-            configs = None
-            if isinstance(config_data, list):
-                configs = config_data
-            elif isinstance(config_data, dict):
-                # Some subscriptions wrap configs in an object
-                if "configs" in config_data:
-                    configs = config_data["configs"]
-                elif "servers" in config_data:
-                    configs = config_data["servers"]
-                else:
-                    configs = [config_data]
+        if config_data is None:
+            if isinstance(last_error, HTTPError):
+                msg = f"HTTP error {last_error.response.status_code}: {last_error.response.text}"
+                raise ValueError(msg)
+            elif isinstance(last_error, JSONDecodeError):
+                msg = "Invalid subscription format: not valid JSON"
+                raise ValueError(msg)
+            elif isinstance(last_error, RequestException):
+                msg = f"Failed to fetch subscription: {last_error!s}"
+                raise ValueError(msg)
             else:
-                msg = "Invalid subscription format: unexpected data structure"
+                msg = "Failed to fetch subscription configuration from any candidate endpoint"
                 raise ValueError(msg)
 
-            return configs, user_info
+        # Handle different response formats
+        configs = None
+        if isinstance(config_data, list):
+            configs = config_data
+        elif isinstance(config_data, dict):
+            # Some subscriptions wrap configs in an object
+            if "configs" in config_data:
+                configs = config_data["configs"]
+            elif "servers" in config_data:
+                configs = config_data["servers"]
+            else:
+                configs = [config_data]
+        else:
+            msg = "Invalid subscription format: unexpected data structure"
+            raise ValueError(msg)
 
-        except HTTPError:
-            msg = f"HTTP error {response.status_code}: {response.text}"
-            raise ValueError(msg)
-        except RequestException as e:
-            msg = f"Failed to fetch subscription: {e!s}"
-            raise ValueError(msg)
+        return configs, user_info, working_url
 
     def _extract_server_info(
         self,
@@ -202,8 +229,8 @@ class SubscriptionService:
         # Normalize URL
         normalized_url = self._normalize_url(str(subscription_data.url))
 
-        # Fetch subscription configuration and user info
-        configs, user_info = self.fetch_subscription_config(normalized_url)
+        # Fetch subscription configuration, user info, and working URL
+        configs, user_info, working_url = self.fetch_subscription_config(normalized_url)
 
         # Create server models from configs
         servers = []
@@ -226,11 +253,11 @@ class SubscriptionService:
             )
             servers.append(server)
 
-        # Create subscription model
+        # Create subscription model with working URL saved
         return SubscriptionModel(
             id=uuid4(),
             name=subscription_data.name,
-            url=normalized_url,
+            url=working_url,
             servers=servers,
             last_updated=datetime.now(),
             user_info=user_info,
@@ -243,8 +270,8 @@ class SubscriptionService:
         http_port: int | None = None,
     ) -> SubscriptionModel:
         """Update servers for an existing subscription."""
-        # Fetch fresh configuration and user info
-        configs, user_info = self.fetch_subscription_config(subscription.url)
+        # Fetch fresh configuration, user info, and working URL
+        configs, user_info, working_url = self.fetch_subscription_config(subscription.url)
 
         # Create new server models
         new_servers = []
@@ -279,7 +306,8 @@ class SubscriptionService:
 
             new_servers.append(server)
 
-        # Update subscription
+        # Update subscription with working URL saved
+        subscription.url = working_url
         subscription.servers = new_servers
         subscription.last_updated = datetime.now()
         subscription.user_info = user_info
