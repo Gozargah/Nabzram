@@ -4,7 +4,7 @@ from typing import Optional
 
 from pydantic import BaseModel, Field, HttpUrl, field_validator, model_validator
 
-from app.models.database import RoutingAction, RoutingRuleModel, XrayLogLevel
+from app.models.database import RoutingAction, RoutingRuleModel, TunRouting, XrayLogLevel
 
 
 class SubscriptionCreate(BaseModel):
@@ -72,6 +72,10 @@ class SettingsUpdate(BaseModel):
     tun_mode: Optional[bool] = Field(
         None,
         description="Enable TUN mode to route all traffic through a TUN interface",
+    )
+    tun_routing: Optional[TunRouting] = Field(
+        None,
+        description="TUN interface routing stack (ipv4_ipv6, ipv4, ipv6)",
     )
     dns_hijack: Optional[bool] = Field(
         None,

@@ -22,6 +22,12 @@ const logLevelOptions: SelectOption[] = [
     { value: 'none', label: 'None' },
 ];
 
+const tunRoutingOptions: SelectOption[] = [
+    { value: 'ipv4_ipv6', label: 'IPv4 and IPv6' },
+    { value: 'ipv4', label: 'IPv4' },
+    { value: 'ipv6', label: 'IPv6' },
+];
+
 const rulesEqual = (a: RoutingRule[] = [], b: RoutingRule[] = []) =>
     JSON.stringify(a) === JSON.stringify(b);
 
@@ -51,7 +57,7 @@ const TabButton: React.FC<{
 
 const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onSaveSuccess, isVpnActive }) => {
     const { setTheme, themes, theme: currentThemeName, font, setFont } = useTheme();
-    const [settings, setSettings] = useState<SettingsUpdate>({ routing_rules: [], dns_hijack: true });
+    const [settings, setSettings] = useState<SettingsUpdate>({ routing_rules: [], dns_hijack: true, tun_routing: 'ipv4_ipv6' });
     const [isLoading, setIsLoading] = useState(true);
     const [isApplyingXray, setIsApplyingXray] = useState(false);
     const [isSavingRouting, setIsSavingRouting] = useState(false);
@@ -74,6 +80,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onSaveSuccess, i
                 xray_log_level: currentSettings.xray_log_level ?? undefined,
                 system_proxy: currentSettings.system_proxy ?? false,
                 tun_mode: currentSettings.tun_mode ?? false,
+                tun_routing: currentSettings.tun_routing ?? 'ipv4_ipv6',
                 dns_hijack: currentSettings.dns_hijack ?? true,
                 routing_rules: currentSettings.routing_rules ?? [],
             };
@@ -103,6 +110,9 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onSaveSuccess, i
         if (settings.tun_mode !== initialSettings.current.tun_mode) {
             changes.tun_mode = settings.tun_mode;
         }
+        if (settings.tun_routing !== initialSettings.current.tun_routing) {
+            changes.tun_routing = settings.tun_routing;
+        }
         if (settings.dns_hijack !== initialSettings.current.dns_hijack) {
             changes.dns_hijack = settings.dns_hijack;
         }
@@ -121,7 +131,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onSaveSuccess, i
                     addToast(message, 'error');
                 });
         }
-    }, [settings.system_proxy, settings.tun_mode, settings.dns_hijack, settings.xray_log_level, addToast]);
+    }, [settings.system_proxy, settings.tun_mode, settings.tun_routing, settings.dns_hijack, settings.xray_log_level, addToast]);
 
     // Auto-save with debounce for ports and assets folder
     useEffect(() => {
@@ -269,6 +279,22 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onSaveSuccess, i
                                                 }`}
                                             />
                                         </button>
+                                    </div>
+                                    <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                                        <div>
+                                            <label id="tun-routing-label" className="text-sm font-medium text-foreground select-none">
+                                                TUN Routing
+                                            </label>
+                                            <p className="text-xs text-muted-foreground/80 mt-1">Select IP network stack routed through the TUN interface.</p>
+                                        </div>
+                                        <div className="w-44">
+                                            <CustomSelect
+                                                value={settings.tun_routing || 'ipv4_ipv6'}
+                                                onChange={(value) => setSettings(prev => ({ ...prev, tun_routing: value as 'ipv4_ipv6' | 'ipv4' | 'ipv6' }))}
+                                                options={tunRoutingOptions}
+                                                disabled={isVpnActive || !settings.tun_mode}
+                                            />
+                                        </div>
                                     </div>
                                      <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
                                         <div>

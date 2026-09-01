@@ -89,6 +89,8 @@ export interface RoutingRule {
   enabled: boolean;
 }
 
+export type TunRouting = 'ipv4_ipv6' | 'ipv4' | 'ipv6';
+
 export interface SettingsResponse {
   socks_port: number | null;
   http_port: number | null;
@@ -97,6 +99,7 @@ export interface SettingsResponse {
   xray_log_level: string | null;
   system_proxy: boolean;
   tun_mode: boolean;
+  tun_routing: TunRouting;
   dns_hijack: boolean;
   routing_rules: RoutingRule[];
 }
@@ -109,6 +112,7 @@ export interface SettingsUpdate {
   xray_log_level?: string | null;
   system_proxy?: boolean;
   tun_mode?: boolean;
+  tun_routing?: TunRouting;
   dns_hijack?: boolean;
   routing_rules?: RoutingRule[];
 }

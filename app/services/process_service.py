@@ -405,10 +405,18 @@ class ProcessManager:
             direct_outbound = {
                 "protocol": "freedom",
                 "tag": "direct",
-                "settings": {},
+                "settings": {
+                    "domainStrategy": "UseIPv4",
+                },
             }
             modified_config["outbounds"].append(direct_outbound)
             logger.info("Added missing 'direct' outbound to configuration")
+        else:
+            for outbound in modified_config["outbounds"]:
+                if outbound.get("tag", "").lower() == "direct" and outbound.get("protocol", "").lower() == "freedom":
+                    if "settings" not in outbound:
+                        outbound["settings"] = {}
+                    outbound["settings"].setdefault("domainStrategy", "UseIPv4")
 
         return modified_config
 
@@ -424,10 +432,18 @@ class ProcessManager:
                 {
                     "protocol": "freedom",
                     "tag": "bypass",
-                    "settings": {},
+                    "settings": {
+                        "domainStrategy": "UseIPv4",
+                    },
                 },
             )
             logger.info("Added missing 'bypass' outbound to configuration")
+        else:
+            for outbound in modified_config["outbounds"]:
+                if outbound.get("tag", "").lower() == "bypass" and outbound.get("protocol", "").lower() == "freedom":
+                    if "settings" not in outbound:
+                        outbound["settings"] = {}
+                    outbound["settings"].setdefault("domainStrategy", "UseIPv4")
 
         return modified_config
 
@@ -613,12 +629,29 @@ class ProcessManager:
                 "rewriteAddress": "1.1.1.1",
                 "rewriteNetwork": "udp",
                 "port": 53,
+                "domainStrategy": "UseIPv4",
             },
             "proxySettings": {
                 "tag": proxy_tag,
             },
         }
         modified_config["outbounds"].append(dns_outbound)
+
+        # Configure DNS block to prefer IPv4
+        if "dns" not in modified_config or not isinstance(modified_config.get("dns"), dict):
+            modified_config["dns"] = {
+                "servers": [
+                    "1.1.1.1",
+                    "8.8.8.8",
+                ],
+                "queryStrategy": "UseIPv4",
+            }
+        else:
+            modified_config["dns"]["queryStrategy"] = "UseIPv4"
+
+        # Ensure routing domainStrategy is set to IPIfNonMatch for DNS resolution stage
+        if "domainStrategy" not in modified_config["routing"] or not modified_config["routing"]["domainStrategy"]:
+            modified_config["routing"]["domainStrategy"] = "IPIfNonMatch"
 
         dns_rule = {
             "type": "field",
@@ -628,7 +661,7 @@ class ProcessManager:
         }
         # Highest priority so DNS is always captured when enabled.
         modified_config["routing"]["rules"] = [dns_rule, *modified_config["routing"]["rules"]]
-        logger.info(f"Applied DNS hijack via dns-out -> {proxy_tag}")
+        logger.info(f"Applied DNS hijack via dns-out -> {proxy_tag} with UseIPv4 domain strategy")
         return modified_config
 
     def _ensure_routing_rules(self, config: dict) -> dict:
@@ -688,38 +721,6 @@ class ProcessManager:
 
         return modified_config
 
-    def _ensure_sockopt_mark(self, config: dict) -> dict:
-        """Ensure all outbounds have streamSettings.sockopt.mark = 438 on Linux."""
-        if platform.system() != "Linux":
-            return config
-
-        modified_config = deepcopy(config)
-
-        # Ensure outbounds section exists
-        if "outbounds" not in modified_config:
-            return modified_config
-
-        modified = False
-        for outbound in modified_config["outbounds"]:
-            # Ensure streamSettings exists
-            if "streamSettings" not in outbound:
-                outbound["streamSettings"] = {}
-
-            # Ensure sockopt exists
-            if "sockopt" not in outbound["streamSettings"]:
-                outbound["streamSettings"]["sockopt"] = {}
-
-            # Set mark to 438 if not already set
-            current_mark = outbound["streamSettings"]["sockopt"].get("mark")
-            if current_mark != 438:
-                outbound["streamSettings"]["sockopt"]["mark"] = 438
-                modified = True
-
-        if modified:
-            logger.info("Applied sockopt.mark = 438 to all outbounds on Linux")
-
-        return modified_config
-
     def _get_tun_interface_name(self) -> str:
         """Pick a platform-appropriate TUN interface name that is not already in use."""
         system = platform.system()
@@ -744,8 +745,30 @@ class ProcessManager:
         # Windows (Wintun) and Linux use a dedicated adapter name.
         return "nabzram0"
 
-    def _build_tun_inbound(self) -> dict:
-        """Build the TUN inbound configuration for the current platform."""
+    def _build_tun_inbound(self, tun_routing: str = "ipv4_ipv6") -> dict:
+        """Build the TUN inbound configuration for the current platform and routing stack."""
+        if tun_routing == "ipv4":
+            gateway = ["172.19.0.1/16"]
+            auto_system_routing_table = ["0.0.0.0/0"]
+            dns_servers = ["1.1.1.1", "8.8.8.8"]
+        elif tun_routing == "ipv6":
+            gateway = ["fd00::1/64"]
+            auto_system_routing_table = ["::/0"]
+            dns_servers = ["2606:4700:4700::1111", "2001:4860:4860::8888"]
+        else:  # ipv4_ipv6 (default)
+            gateway = [
+                "172.19.0.1/16",
+                "fd00::1/64",
+            ]
+            auto_system_routing_table = [
+                "0.0.0.0/0",
+                "::/0",
+            ]
+            dns_servers = [
+                "1.1.1.1",
+                "8.8.8.8",
+            ]
+
         return {
             "tag": "tun",
             "protocol": "tun",
@@ -753,18 +776,9 @@ class ProcessManager:
                 "name": self._get_tun_interface_name(),
                 "desc": "Wintun",
                 "mtu": 1500,
-                "gateway": [
-                    "172.19.0.1/16",
-                    "fd00::1/64",
-                ],
-                "dns": [
-                    "1.1.1.1",
-                    "8.8.8.8",
-                ],
-                "autoSystemRoutingTable": [
-                    "0.0.0.0/0",
-                    "::/0",
-                ],
+                "gateway": gateway,
+                "dns": dns_servers,
+                "autoSystemRoutingTable": auto_system_routing_table,
                 "autoOutboundsInterface": "auto",
             },
             "sniffing": {
@@ -782,9 +796,12 @@ class ProcessManager:
     def _ensure_tun_inbound(self, config: dict) -> dict:
         """Add or remove the TUN inbound based on the tun_mode setting."""
         tun_mode = False
+        tun_routing = "ipv4_ipv6"
         try:
             db_settings = db.get_settings()
             tun_mode = bool(getattr(db_settings, "tun_mode", False))
+            raw_routing = getattr(db_settings, "tun_routing", "ipv4_ipv6")
+            tun_routing = raw_routing.value if hasattr(raw_routing, "value") else str(raw_routing or "ipv4_ipv6")
         except Exception as e:
             logger.warning(f"Failed to read tun_mode setting: {e}")
 
@@ -806,10 +823,10 @@ class ProcessManager:
         if not tun_mode:
             return modified_config
 
-        tun_inbound = self._build_tun_inbound()
+        tun_inbound = self._build_tun_inbound(tun_routing)
         modified_config["inbounds"].append(tun_inbound)
         logger.info(
-            f"Added TUN inbound with interface name '{tun_inbound['settings']['name']}'",
+            f"Added TUN inbound with interface name '{tun_inbound['settings']['name']}' (routing: {tun_routing})",
         )
         return modified_config
 
@@ -854,9 +871,6 @@ class ProcessManager:
 
             # Hijack DNS port 53 through dns-out when enabled
             runtime_config = self._apply_dns_hijack(runtime_config)
-
-            # Ensure sockopt.mark = 438 on Linux
-            runtime_config = self._ensure_sockopt_mark(runtime_config)
 
             # Inject TUN inbound when TUN mode is enabled (skip for URL tests)
             tun_mode = False

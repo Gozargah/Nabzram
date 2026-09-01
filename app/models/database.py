@@ -23,6 +23,12 @@ class RoutingAction(str, Enum):
     BLOCK = "block"
 
 
+class TunRouting(str, Enum):
+    IPV4_IPV6 = "ipv4_ipv6"
+    IPV4 = "ipv4"
+    IPV6 = "ipv6"
+
+
 class RoutingRuleModel(BaseModel):
     """Custom routing rule applied at runtime."""
 
@@ -127,6 +133,10 @@ class SettingsModel(BaseModel):
     tun_mode: Optional[bool] = Field(
         False,
         description="Enable TUN mode to route all traffic through a TUN interface",
+    )
+    tun_routing: Optional[TunRouting] = Field(
+        TunRouting.IPV4_IPV6,
+        description="TUN interface routing stack (ipv4_ipv6, ipv4, ipv6)",
     )
     dns_hijack: Optional[bool] = Field(
         True,
