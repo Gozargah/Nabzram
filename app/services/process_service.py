@@ -650,7 +650,7 @@ class ProcessManager:
             modified_config["dns"]["queryStrategy"] = "UseIPv4v6"
 
         # Ensure routing domainStrategy is set to IPIfNonMatch for DNS resolution stage
-        if "domainStrategy" not in modified_config["routing"] or not modified_config["routing"]["domainStrategy"]:
+        if "routing" in modified_config:
             modified_config["routing"]["domainStrategy"] = "IPIfNonMatch"
 
         dns_rule = {
