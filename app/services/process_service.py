@@ -406,7 +406,7 @@ class ProcessManager:
                 "protocol": "freedom",
                 "tag": "direct",
                 "settings": {
-                    "domainStrategy": "UseIPv4",
+                    "domainStrategy": "UseIPv4v6",
                 },
             }
             modified_config["outbounds"].append(direct_outbound)
@@ -416,7 +416,7 @@ class ProcessManager:
                 if outbound.get("tag", "").lower() == "direct" and outbound.get("protocol", "").lower() == "freedom":
                     if "settings" not in outbound:
                         outbound["settings"] = {}
-                    outbound["settings"].setdefault("domainStrategy", "UseIPv4")
+                    outbound["settings"].setdefault("domainStrategy", "UseIPv4v6")
 
         return modified_config
 
@@ -433,7 +433,7 @@ class ProcessManager:
                     "protocol": "freedom",
                     "tag": "bypass",
                     "settings": {
-                        "domainStrategy": "UseIPv4",
+                        "domainStrategy": "UseIPv4v6",
                     },
                 },
             )
@@ -443,7 +443,7 @@ class ProcessManager:
                 if outbound.get("tag", "").lower() == "bypass" and outbound.get("protocol", "").lower() == "freedom":
                     if "settings" not in outbound:
                         outbound["settings"] = {}
-                    outbound["settings"].setdefault("domainStrategy", "UseIPv4")
+                    outbound["settings"].setdefault("domainStrategy", "UseIPv4v6")
 
         return modified_config
 
@@ -629,7 +629,7 @@ class ProcessManager:
                 "rewriteAddress": "1.1.1.1",
                 "rewriteNetwork": "udp",
                 "port": 53,
-                "domainStrategy": "UseIPv4",
+                "domainStrategy": "UseIPv4v6",
             },
             "proxySettings": {
                 "tag": proxy_tag,
@@ -637,17 +637,17 @@ class ProcessManager:
         }
         modified_config["outbounds"].append(dns_outbound)
 
-        # Configure DNS block to prefer IPv4
+        # Configure DNS block to prefer IPv4 with IPv6 fallback
         if "dns" not in modified_config or not isinstance(modified_config.get("dns"), dict):
             modified_config["dns"] = {
                 "servers": [
                     "1.1.1.1",
                     "8.8.8.8",
                 ],
-                "queryStrategy": "UseIPv4",
+                "queryStrategy": "UseIPv4v6",
             }
         else:
-            modified_config["dns"]["queryStrategy"] = "UseIPv4"
+            modified_config["dns"]["queryStrategy"] = "UseIPv4v6"
 
         # Ensure routing domainStrategy is set to IPIfNonMatch for DNS resolution stage
         if "domainStrategy" not in modified_config["routing"] or not modified_config["routing"]["domainStrategy"]:
@@ -661,7 +661,7 @@ class ProcessManager:
         }
         # Highest priority so DNS is always captured when enabled.
         modified_config["routing"]["rules"] = [dns_rule, *modified_config["routing"]["rules"]]
-        logger.info(f"Applied DNS hijack via dns-out -> {proxy_tag} with UseIPv4 domain strategy")
+        logger.info(f"Applied DNS hijack via dns-out -> {proxy_tag} with UseIPv4v6 domain strategy")
         return modified_config
 
     def _ensure_routing_rules(self, config: dict) -> dict:
